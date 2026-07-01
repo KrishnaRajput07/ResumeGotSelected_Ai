@@ -1567,9 +1567,7 @@ def page_processing():
             elapsed = time.time() - pipeline_start_time
             elapsed_ph.markdown(f"<div style='text-align:right; font-size:0.82rem; color:#948a7c; padding-top:12px;'>? {elapsed:.0f}s elapsed</div>", unsafe_allow_html=True)
 
-            if elapsed > 600:
-                st.session_state.run_error = "Pipeline timed out after 10 minutes."
-                break
+            # Timeout constraint removed by user request
             try:
                 item = progress_q.get(timeout=0.5)
             except queue.Empty:
