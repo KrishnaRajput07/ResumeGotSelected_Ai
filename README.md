@@ -100,10 +100,17 @@ copy .env.example .env
 python scripts/smoke_test.py
 ```
 
-**9. Run the app:**
+**9. Run the app (Interactive UI):**
 ```cmd
 streamlit run app/main.py
 ```
+
+**10. Reproduce the Submission CSV (Ranking Step):**
+To fulfill the Stage 3 reproduction requirement (runs in < 5 mins on CPU using pre-computed artifacts), use the exact command below:
+```cmd
+python rank.py --candidates ./India_runs_data_and_ai_challenge/candidates.jsonl --out ./submission.csv
+```
+
 
 ---
 
