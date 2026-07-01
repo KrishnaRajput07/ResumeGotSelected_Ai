@@ -149,6 +149,22 @@ python scripts/validate_pipeline.py --stage full
 
 ---
 
+## Sandbox Evaluation (Docker)
+
+To fulfill the **Stage 1 (Sandbox)** requirements from Section 10.5 of the spec, a Dockerfile is provided. Because this solution relies on a locally-hosted 8B parameter LLM (which exceeds the RAM and binary execution limits of free tier platforms like Streamlit Cloud/HF Spaces), we use the allowed Docker escape hatch.
+
+The Docker setup builds a self-contained environment, installs Ollama, pulls `qwen3:8b`, runs the pre-computation on the provided `sample_candidates.json` (≤100 profiles), and generates `submission_sandbox.csv` all within the 5-minute sandbox CPU budget limit.
+
+```cmd
+# 1. Build the self-contained image (this will download the model)
+docker build -t redrob-ai-recruiter .
+
+# 2. Run the sandbox (produces submission_sandbox.csv)
+docker run --rm redrob-ai-recruiter
+```
+
+---
+
 ## Running All Tests
 
 ```cmd
