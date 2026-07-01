@@ -1,0 +1,38 @@
+# ── LLM (Ollama – local, free) ──────────────────────────────────────────────
+ollama>=0.2.1             # Python client for Ollama REST API
+
+# ── Embeddings (HuggingFace – local, free) ──────────────────────────────────
+sentence-transformers>=3.0.0   # Loads BAAI/bge-small-en-v1.5 and bge-reranker-base locally
+torch>=2.2.0                   # Backend for sentence-transformers
+transformers>=4.40.0
+
+# ── Vector Search ────────────────────────────────────────────────────────────
+faiss-cpu>=1.8.0
+numpy>=1.26.0
+
+# ── Document Parsing ─────────────────────────────────────────────────────────
+pdfplumber>=0.11.0
+PyMuPDF>=1.24.0            # Fallback for complex/scanned PDFs
+python-docx>=1.1.0
+
+# ── Data & Schemas ───────────────────────────────────────────────────────────
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+pandas>=2.2.0
+openpyxl>=3.1.0
+
+# ── Dashboard ────────────────────────────────────────────────────────────────
+streamlit>=1.35.0
+plotly>=5.22.0             # Score distribution charts in dashboard
+
+# ── Utilities ────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+tenacity>=8.3.0            # Retry/backoff for Ollama calls
+tqdm>=4.66.0
+rich>=13.7.0               # Console progress output
+thefuzz>=0.22.0            # Fuzzy string match for evidence quote verification
+python-Levenshtein>=0.25.0 # Speed boost for thefuzz
+
+# ── Testing ──────────────────────────────────────────────────────────────────
+pytest>=8.2.0
+pytest-asyncio>=0.23.0

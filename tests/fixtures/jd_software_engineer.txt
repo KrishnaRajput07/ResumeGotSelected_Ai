@@ -1,0 +1,54 @@
+Senior Software Engineer (Backend)
+TechScale India Pvt. Ltd. — Bengaluru / Remote
+
+About the Role
+We are looking for a Senior Software Engineer with deep expertise in Python backend systems to join our Platform Engineering team. You will own the design, development, and operation of high-throughput microservices that power our core data platform. This is a high-impact role: you will architect solutions that handle millions of requests daily and mentor a team of backend engineers.
+
+Responsibilities
+- Design, build, and maintain scalable Python backend services using FastAPI or Django REST Framework
+- Lead technical design reviews, set coding standards, and drive architectural decisions for the backend platform
+- Build and operate cloud infrastructure on AWS (EC2, ECS, RDS, S3, Lambda, CloudWatch)
+- Containerise services with Docker and manage deployments via Kubernetes (EKS)
+- Own PostgreSQL schema design, query optimisation, and database migrations
+- Define and monitor SLOs; respond to on-call incidents and conduct blameless post-mortems
+- Collaborate with product, data science, and frontend teams on cross-functional initiatives
+- Mentor 3–5 junior and mid-level engineers; conduct code reviews and technical interviews
+- Contribute to open-source tooling and internal developer-experience improvements
+
+Hard Requirements (Non-Negotiable)
+- 5+ years of professional software engineering experience
+- 4+ years writing production Python (not scripting — actual services in production)
+- BS or MS in Computer Science, Software Engineering, or equivalent rigorous technical discipline
+- Demonstrated experience building REST APIs at scale (100K+ RPS or equivalent throughput)
+- Strong knowledge of relational databases (PostgreSQL preferred)
+- Proficiency with AWS cloud services
+- Experience with Docker in production environments
+
+Core Technical Skills
+- Python (advanced): async, type hints, dataclasses, testing, profiling
+- FastAPI or Django REST Framework
+- PostgreSQL: indexes, query plans, VACUUM, connection pooling
+- AWS: EC2, S3, RDS, Lambda, IAM, CloudWatch, VPC
+- Docker: multi-stage builds, image optimisation, Docker Compose
+- Git, CI/CD (GitHub Actions or similar), code review culture
+
+Nice-to-Have (Will Differentiate Your Application)
+- Kubernetes / EKS production experience
+- ML systems experience: model serving, feature stores, batch inference pipelines
+- Kafka or other distributed message queues
+- Redis caching patterns
+- Experience with distributed tracing (OpenTelemetry, Jaeger)
+- Open-source contributions
+
+Leadership & Culture
+We expect senior engineers to act as force multipliers. You should be comfortable driving technical roadmaps, navigating ambiguity, and raising the bar for your team. We value clear written communication, ruthless prioritisation, and a bias toward shipping.
+
+Compensation & Benefits
+- Competitive salary (₹35–55 LPA depending on experience)
+- ESOPs in a Series-B startup
+- Remote-friendly with quarterly team offsites
+- Learning & development budget ₹1.5L/year
+- Health insurance (self + family)
+
+Equal Opportunity
+TechScale is committed to building a diverse engineering team. We welcome applicants from all backgrounds.

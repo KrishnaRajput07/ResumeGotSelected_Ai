@@ -1,0 +1,52 @@
+Data Scientist II
+Analytix Labs — Hyderabad / Hybrid
+
+About the Role
+We are hiring a Data Scientist II to join our Machine Learning Platform team. You will develop, validate, and deploy statistical and machine learning models that directly influence product recommendations, fraud detection, and customer lifetime value predictions. You will work at the intersection of research and engineering — expected to go from exploratory analysis to production model in the same sprint cycle.
+
+Responsibilities
+- Design and implement supervised and unsupervised machine learning models using scikit-learn, XGBoost, and PyTorch
+- Conduct rigorous statistical analyses (A/B tests, causal inference, regression modelling) on large datasets
+- Write clean, tested, production-ready Python code for model training pipelines and inference services
+- Query and process large-scale data using SQL (Redshift/BigQuery) and PySpark when needed
+- Collaborate with data engineers to design feature pipelines and maintain the feature store
+- Document model cards, experiment logs, and monitoring dashboards
+- Present findings and model performance to non-technical stakeholders
+- Mentor junior data scientists and review pull requests
+
+Hard Requirements (Non-Negotiable)
+- MS or PhD in Statistics, Mathematics, Computer Science, Data Science, or a closely related quantitative discipline
+- 2+ years professional data science or applied ML experience (academic research counts if substantial)
+- Strong Python programming skills: pandas, NumPy, scikit-learn, and at least one deep learning framework
+- Solid statistical foundation: hypothesis testing, confidence intervals, Bayesian inference, experimental design
+- Proficiency with SQL for data exploration and feature engineering
+- Demonstrated ability to ship ML models to production (not just notebooks)
+
+Core Technical Skills
+- Python: pandas, NumPy, scikit-learn, PyTorch or TensorFlow
+- Statistical modelling: regression, classification, clustering, survival analysis
+- SQL: complex joins, window functions, query optimisation
+- Experiment design: A/B testing, multi-armed bandits, statistical power analysis
+- Version control for models: MLflow or similar experiment tracking
+- Jupyter notebooks and reproducible research practices
+
+Nice-to-Have (Will Differentiate Your Application)
+- MLOps experience: model deployment pipelines, CI/CD for ML, model monitoring in production
+- Apache Spark / PySpark for large-scale data processing
+- Cloud ML platforms: SageMaker, Vertex AI, or Azure ML
+- Experience with LLMs or generative AI (fine-tuning, RAG pipelines, prompt engineering)
+- Contributions to open-source ML libraries
+- Publications or presentations at ML conferences (NeurIPS, ICML, EMNLP, KDD)
+
+What We Value
+We want scientists who are sceptical of their own models. We prioritise rigour over speed — a model that ships with proper validation beats a model that ships fast but silently degrades. We also value clear communication: if you cannot explain your model to a product manager, it does not matter how accurate it is.
+
+Compensation & Benefits
+- ₹22–38 LPA depending on experience and qualifications
+- Annual research conference budget
+- Access to high-memory GPU instances for model training
+- Flexible work-from-home policy
+- Medical insurance and mental health support
+
+Our Stack
+Python 3.11, PyTorch 2.x, scikit-learn, pandas, SQL (Redshift), Airflow, MLflow, Docker, Kubernetes, AWS (S3, SageMaker, Glue).

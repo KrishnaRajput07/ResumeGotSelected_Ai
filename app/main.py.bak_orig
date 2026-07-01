@@ -1,0 +1,2225 @@
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# AI Recruiter Co-Pilot â€” Streamlit Dashboard (Premium Redesign)
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+import sys
+import os
+from pathlib import Path
+
+_APP_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _APP_DIR.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+_VENV_ROOT = _PROJECT_ROOT / ".venv"
+_BLOCKED = {Path(r"D:\python-packages")}
+
+def _clean_sys_path() -> None:
+    cleaned = []
+    for entry in sys.path:
+        if not entry:
+            cleaned.append(entry)
+            continue
+        try:
+            p_str = str(Path(entry).resolve()).lower()
+        except Exception:
+            cleaned.append(entry)
+            continue
+        is_blocked = False
+        for blocked in _BLOCKED:
+            try:
+                b_str = str(blocked.resolve()).lower()
+                if p_str == b_str or p_str.startswith(b_str + "\\") or p_str.startswith(b_str + "/"):
+                    is_blocked = True
+                    break
+            except Exception:
+                pass
+        if not is_blocked:
+            cleaned.append(entry)
+    sys.path[:] = cleaned
+
+_clean_sys_path()
+
+import json
+import shutil
+import tempfile
+import time
+import threading
+import queue
+import uuid
+import logging
+from datetime import datetime
+from pathlib import Path
+
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+
+from core.config import settings
+from core.llm_client import llm_client
+from schemas.rubric import FrozenRubric, WeightedCriterion, HardGate
+from schemas.candidate import CandidateRecord
+from pipeline.orchestrator import run_step1_only, run_full_pipeline, run_jsonl_pipeline, ProgressUpdate
+
+logging.basicConfig(level=logging.INFO)
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Page Config
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+st.set_page_config(
+    page_title="ResumeGotSelected.Ai",
+    page_icon="R",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Premium CSS â€” Obsidian + Violet + Teal Tricolor Dark Theme
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+st.markdown("""
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  /* â”€â”€ Root vars â”€â”€ */
+  :root {
+    --bg-base:     #fffaf2;
+    --bg-surface:  #fffaf2;
+    --bg-elevated: #fff4df;
+    --bg-glass:    rgba(255,255,255,0.78);
+    --border-subtle: rgba(255,128,199,0.18);
+    --border-strong: rgba(255,128,199,0.40);
+    --violet-400:  #ff80c7;
+    --violet-500:  #ff80c7;
+    --violet-600:  #111111;
+    --violet-700:  #000000;
+    --teal-400:    #ffbf00;
+    --teal-500:    #ffbf00;
+    --rose-400:    #fb7185;
+    --amber-400:   #fbbf24;
+    --green-400:   #34d399;
+    --text-primary: #111111;
+    --text-secondary: #4d463d;
+    --text-muted: #948a7c;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+  }
+
+  /* â”€â”€ Global resets â”€â”€ */
+  * { box-sizing: border-box; }
+
+  html, body, [data-testid="stAppViewContainer"] {
+    background: var(--bg-base) !important;
+    color: var(--text-primary) !important;
+    font-family: 'Inter', -apple-system, sans-serif !important;
+    font-size: 14px;
+  }
+
+  /* â”€â”€ Gradient mesh background â”€â”€ */
+  [data-testid="stAppViewContainer"]::before {
+    content: '';
+    position: fixed;
+    top: -30%;
+    left: -20%;
+    width: 60%;
+    height: 60%;
+    background: radial-gradient(ellipse at center, rgba(255,128,199,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  [data-testid="stAppViewContainer"]::after {
+    content: '';
+    position: fixed;
+    bottom: -20%;
+    right: -10%;
+    width: 50%;
+    height: 50%;
+    background: radial-gradient(ellipse at center, rgba(255,191,0,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* â”€â”€ Main content â”€â”€ */
+  [data-testid="stMain"] { position: relative; z-index: 1; }
+  .main .block-container {
+    padding: 1.5rem 2rem 3rem 2rem !important;
+    max-width: 1400px !important;
+  }
+
+  /* â”€â”€ Sidebar â”€â”€ */
+  [data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #fffaf2 0%, #fffaf2 100%) !important;
+    border-right: 1px solid var(--border-subtle) !important;
+  }
+  [data-testid="stSidebar"] > div { padding: 0 !important; }
+
+  /* â”€â”€ Header strip â”€â”€ */
+  [data-testid="stHeader"] { background: transparent !important; }
+
+  /* â”€â”€ Typography â”€â”€ */
+  h1 {
+    font-size: 2rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.04em !important;
+    line-height: 1.1 !important;
+    background: linear-gradient(135deg, #ff80c7 0%, #ff80c7 40%, #ffbf00 100%);
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    margin-bottom: 0.25rem !important;
+  }
+  h2 {
+    font-size: 1.15rem !important;
+    font-weight: 700 !important;
+    color: var(--violet-400) !important;
+    letter-spacing: -0.02em !important;
+    margin-top: 1.75rem !important;
+  }
+  h3 {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: #ff80c7 !important;
+  }
+  p, li { color: var(--text-secondary) !important; line-height: 1.65 !important; }
+
+  /* â”€â”€ Glass cards â”€â”€ */
+  .card {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 0 24px rgba(255,128,199,0.08);
+  }
+  .card-accent {
+    background: linear-gradient(135deg, rgba(255,128,199,0.08) 0%, rgba(255,191,0,0.04) 100%);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  /* â”€â”€ Hero banner â”€â”€ */
+  .hero-banner {
+    background: linear-gradient(135deg, rgba(255,128,199,0.15) 0%, rgba(255,191,0,0.08) 100%);
+    border: 1px solid rgba(255,128,199,0.25);
+    border-radius: var(--radius-xl);
+    padding: 2rem 2.5rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-banner::before {
+    content: 'âœ¦';
+    position: absolute;
+    right: 2rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 6rem;
+    opacity: 0.05;
+    color: var(--violet-400);
+  }
+  .hero-title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    background: linear-gradient(135deg, #ff80c7 0%, #ff80c7 50%, #ffbf00 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0 0 0.5rem 0;
+  }
+  .hero-sub {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  /* â”€â”€ Metric tiles â”€â”€ */
+  [data-testid="metric-container"] {
+    background: var(--bg-glass) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: var(--radius-md) !important;
+    padding: 1rem 1.25rem !important;
+    transition: all 0.2s ease !important;
+  }
+  [data-testid="metric-container"]:hover {
+    border-color: var(--border-strong) !important;
+    box-shadow: 0 4px 20px rgba(255,128,199,0.12) !important;
+  }
+  [data-testid="stMetricValue"] {
+    font-size: 1.6rem !important;
+    font-weight: 800 !important;
+    color: var(--text-primary) !important;
+  }
+  [data-testid="stMetricLabel"] {
+    font-size: 0.75rem !important;
+    color: var(--text-secondary) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+    font-weight: 500 !important;
+  }
+
+  /* â”€â”€ Stat badges â”€â”€ */
+  .stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,128,199,0.12);
+    border: 1px solid rgba(255,128,199,0.25);
+    border-radius: 100px;
+    padding: 4px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--violet-400);
+  }
+  .stat-badge.teal {
+    background: rgba(255,191,0,0.1);
+    border-color: rgba(255,191,0,0.25);
+    color: var(--teal-400);
+  }
+  .stat-badge.rose {
+    background: rgba(251,113,133,0.1);
+    border-color: rgba(251,113,133,0.25);
+    color: var(--rose-400);
+  }
+  .stat-badge.amber {
+    background: rgba(251,191,36,0.1);
+    border-color: rgba(251,191,36,0.25);
+    color: var(--amber-400);
+  }
+  .stat-badge.green {
+    background: rgba(52,211,153,0.1);
+    border-color: rgba(52,211,153,0.25);
+    color: var(--green-400);
+  }
+
+  /* â”€â”€ Step indicator â”€â”€ */
+  .step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--violet-600), var(--violet-700));
+    color: #fff;
+    border-radius: 50%;
+    width: 26px; height: 26px;
+    font-weight: 700; font-size: 0.8rem;
+    margin-right: 10px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(17,17,17,0.4);
+  }
+  .step-badge.done {
+    background: linear-gradient(135deg, var(--teal-500), #0d9488);
+    box-shadow: 0 2px 8px rgba(255,191,0,0.4);
+  }
+  .step-badge.running {
+    background: linear-gradient(135deg, var(--violet-500), var(--violet-600));
+    animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+  }
+  .step-badge.error {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 2px 8px rgba(239,68,68,0.4);
+  }
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(255,128,199,0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(255,128,199,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,128,199,0); }
+  }
+  .step-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 4px;
+    transition: background 0.2s;
+  }
+  .step-row.running { background: rgba(255,128,199,0.08); }
+  .step-row.done { background: rgba(255,191,0,0.06); }
+
+  /* â”€â”€ Score pills â”€â”€ */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .pill-high { background: rgba(52,211,153,0.15); color: #34d399; border: 1px solid rgba(52,211,153,0.3); }
+  .pill-mid  { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+  .pill-low  { background: rgba(251,113,133,0.15); color: #fb7185; border: 1px solid rgba(251,113,133,0.3); }
+  .pill-violet { background: rgba(255,128,199,0.15); color: #ff80c7; border: 1px solid rgba(255,128,199,0.3); }
+
+  /* â”€â”€ Candidate card â”€â”€ */
+  .cand-card {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.5rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .cand-card:hover {
+    border-color: var(--border-strong);
+    background: rgba(255,128,199,0.06);
+    transform: translateX(2px);
+  }
+  .cand-rank {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--violet-500);
+    min-width: 2rem;
+    line-height: 1;
+  }
+  .cand-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .cand-title {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+  .score-bar-bg {
+    background: rgba(17,17,17,0.06);
+    border-radius: 100px;
+    height: 6px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    background: linear-gradient(90deg, var(--violet-600), var(--teal-400));
+    transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* â”€â”€ Nav items in sidebar â”€â”€ */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    margin: 2px 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-weight: 500;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border: 1px solid transparent;
+  }
+  .nav-item:hover { background: rgba(255,128,199,0.08); color: var(--text-primary); }
+  .nav-item.active {
+    background: rgba(255,128,199,0.16);
+    color: var(--violet-400);
+    border-color: rgba(255,128,199,0.25);
+    font-weight: 600;
+  }
+  .nav-icon { font-size: 1rem; width: 20px; text-align: center; }
+  .nav-label { flex: 1; }
+  .nav-dot {
+    width: 6px; height: 6px;
+    background: var(--teal-400);
+    border-radius: 50%;
+    animation: blink 1.5s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .nav-lock { color: var(--text-muted); font-size: 0.7rem; }
+
+  /* â”€â”€ Evidence quote â”€â”€ */
+  .evidence-quote {
+    background: rgba(255,128,199,0.06);
+    border-left: 3px solid var(--violet-500);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 8px 12px;
+    margin: 6px 0;
+    font-size: 0.82rem;
+    color: var(--violet-400);
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  /* â”€â”€ Flag chips â”€â”€ */
+  .flag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    margin: 2px;
+  }
+  .flag-info    { background: rgba(96,165,250,0.12); color: #60a5fa; border: 1px solid rgba(96,165,250,0.25); }
+  .flag-review  { background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+  .flag-concern { background: rgba(251,113,133,0.12); color: #fb7185; border: 1px solid rgba(251,113,133,0.25); }
+
+  /* â”€â”€ Buttons â”€â”€ */
+  .stButton > button {
+    background: linear-gradient(135deg, var(--violet-600) 0%, var(--violet-700) 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: var(--radius-sm) !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
+    padding: 0.55rem 1.5rem !important;
+    transition: all 0.2s ease !important;
+    letter-spacing: 0.01em !important;
+    box-shadow: 0 2px 12px rgba(17,17,17,0.3) !important;
+  }
+  .stButton > button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 20px rgba(17,17,17,0.45) !important;
+  }
+  .stButton > button:active { transform: translateY(0) !important; }
+  .stButton > button[disabled] {
+    background: rgba(17,17,17,0.06) !important;
+    color: var(--text-muted) !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  /* â”€â”€ Primary CTA button â”€â”€ */
+  [data-testid="stButton"] button[kind="primary"] {
+    background: linear-gradient(135deg, var(--teal-500) 0%, var(--violet-600) 100%) !important;
+    box-shadow: 0 3px 16px rgba(255,191,0,0.35) !important;
+    padding: 0.65rem 2rem !important;
+    font-size: 0.92rem !important;
+  }
+
+  /* â”€â”€ Tabs â”€â”€ */
+  .stTabs [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    gap: 0 !important;
+  }
+  .stTabs [data-baseweb="tab"] {
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    font-weight: 500 !important;
+    font-size: 0.88rem !important;
+    padding: 0.6rem 1.25rem !important;
+    border-bottom: 2px solid transparent !important;
+    transition: all 0.2s !important;
+    border-radius: 0 !important;
+  }
+  .stTabs [data-baseweb="tab"]:hover { color: var(--text-primary) !important; }
+  .stTabs [aria-selected="true"] {
+    color: var(--violet-400) !important;
+    border-bottom-color: var(--violet-500) !important;
+    font-weight: 600 !important;
+  }
+
+  /* â”€â”€ Slider â”€â”€ */
+  .stSlider > div > div > div { background: var(--violet-600) !important; }
+  .stSlider [data-testid="stTickBar"] > div { background: rgba(255,128,199,0.3) !important; }
+
+  /* â”€â”€ Toggle â”€â”€ */
+  .stToggle > label { color: var(--text-secondary) !important; }
+
+  /* â”€â”€ Radio â”€â”€ */
+  .stRadio label { color: var(--text-secondary) !important; font-size: 0.88rem !important; }
+  .stRadio [aria-checked="true"] + div { color: var(--violet-400) !important; }
+
+  /* â”€â”€ File uploader â”€â”€ */
+  [data-testid="stFileUploader"] {
+    background: var(--bg-glass) !important;
+    border: 2px dashed rgba(255,128,199,0.3) !important;
+    border-radius: var(--radius-lg) !important;
+    transition: all 0.2s ease !important;
+  }
+  [data-testid="stFileUploader"]:hover {
+    border-color: rgba(255,128,199,0.6) !important;
+    background: rgba(255,128,199,0.04) !important;
+  }
+  [data-testid="stFileUploaderDropzoneInstructions"] { color: var(--text-secondary) !important; }
+
+  /* â”€â”€ Progress bar â”€â”€ */
+  .stProgress > div > div > div {
+    background: linear-gradient(90deg, var(--violet-600), var(--teal-400)) !important;
+    border-radius: 100px !important;
+  }
+  .stProgress > div > div { background: rgba(17,17,17,0.06) !important; border-radius: 100px !important; }
+
+  /* â”€â”€ Expander â”€â”€ */
+  [data-testid="stExpander"] {
+    background: var(--bg-glass) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: var(--radius-md) !important;
+    margin-bottom: 6px !important;
+    overflow: hidden !important;
+  }
+  [data-testid="stExpander"]:hover { border-color: var(--border-strong) !important; }
+  [data-testid="stExpander"] summary {
+    color: var(--text-primary) !important;
+    font-weight: 500 !important;
+    padding: 0.75rem 1rem !important;
+  }
+  [data-testid="stExpander"] summary:hover { background: rgba(255,128,199,0.04) !important; }
+
+  /* â”€â”€ Text area, inputs â”€â”€ */
+  .stTextArea textarea, .stTextInput input {
+    background: var(--bg-elevated) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-primary) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.82rem !important;
+  }
+  .stTextArea textarea:focus, .stTextInput input:focus {
+    border-color: var(--violet-500) !important;
+    box-shadow: 0 0 0 3px rgba(255,128,199,0.15) !important;
+  }
+
+  /* â”€â”€ Selectbox â”€â”€ */
+  [data-testid="stSelectbox"] > div > div {
+    background: var(--bg-elevated) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-primary) !important;
+  }
+
+  /* â”€â”€ DataFrames â”€â”€ */
+  .stDataFrame { border: 1px solid var(--border-subtle) !important; border-radius: var(--radius-md) !important; overflow: hidden !important; }
+  .stDataFrame th { background: var(--bg-elevated) !important; color: var(--violet-400) !important; font-weight: 600 !important; font-size: 0.78rem !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; }
+  .stDataFrame td { background: var(--bg-surface) !important; color: var(--text-secondary) !important; font-size: 0.83rem !important; }
+  .stDataFrame tr:hover td { background: rgba(255,128,199,0.06) !important; }
+
+  /* â”€â”€ Alert / info boxes â”€â”€ */
+  [data-testid="stAlert"] {
+    border-radius: var(--radius-md) !important;
+    border-width: 1px !important;
+  }
+
+  /* â”€â”€ Divider â”€â”€ */
+  hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0 !important; }
+
+  /* â”€â”€ Code â”€â”€ */
+  code {
+    background: rgba(255,128,199,0.12) !important;
+    color: var(--violet-400) !important;
+    border-radius: 4px !important;
+    padding: 1px 6px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.82em !important;
+  }
+
+  /* â”€â”€ Sidebar nav buttons override â”€â”€ */
+  .sidebar-nav .stButton > button {
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-secondary) !important;
+    font-weight: 500 !important;
+    font-size: 0.88rem !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding: 0.6rem 1rem !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    transition: all 0.15s ease !important;
+  }
+  .sidebar-nav .stButton > button:hover {
+    background: rgba(255,128,199,0.1) !important;
+    color: var(--text-primary) !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  .sidebar-nav-active .stButton > button {
+    background: rgba(255,128,199,0.18) !important;
+    color: var(--violet-400) !important;
+    border-color: rgba(255,128,199,0.3) !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+  }
+  .sidebar-nav-disabled .stButton > button {
+    color: var(--text-muted) !important;
+    background: transparent !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  /* â”€â”€ Spinner â”€â”€ */
+  .stSpinner > div { border-top-color: var(--violet-500) !important; }
+
+  /* â”€â”€ Download button â”€â”€ */
+  .stDownloadButton > button {
+    background: var(--bg-glass) !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--violet-400) !important;
+    box-shadow: none !important;
+  }
+  .stDownloadButton > button:hover {
+    background: rgba(255,128,199,0.12) !important;
+    box-shadow: 0 4px 16px rgba(255,128,199,0.2) !important;
+  }
+
+  /* â”€â”€ Scrollbar â”€â”€ */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: rgba(255,128,199,0.3); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,128,199,0.5); }
+
+  /* â”€â”€ Responsive â”€â”€ */
+  @media (max-width: 768px) {
+    .main .block-container { padding: 1rem 1rem 2rem 1rem !important; }
+    h1 { font-size: 1.5rem !important; }
+    .hero-banner { padding: 1.25rem 1.5rem !important; }
+    .hero-title { font-size: 1.35rem !important; }
+  }
+</style>
+""", unsafe_allow_html=True)
+st.markdown("""
+<style>
+  :root {
+    --bg-base: #fffaf2;
+    --bg-surface: #ffffff;
+    --bg-elevated: #fff4df;
+    --bg-glass: rgba(255,255,255,0.78);
+    --border-subtle: rgba(17,17,17,0.10);
+    --border-strong: rgba(255,128,199,0.44);
+    --violet-400: #d81159;
+    --violet-500: #d81159;
+    --violet-600: #111111;
+    --violet-700: #000000;
+    --teal-400: #ffbf00;
+    --teal-500: #ffbf00;
+    --rose-400: #d81159;
+    --amber-400: #ffbf00;
+    --green-400: #10a66a;
+    --text-primary: #111111;
+    --text-secondary: #4d463d;
+    --text-muted: #948a7c;
+  }
+
+  html, body, [data-testid="stAppViewContainer"] {
+    background: linear-gradient(135deg, rgba(255,128,199,0.16) 0%, rgba(255,191,0,0.10) 42%, rgba(255,250,242,1) 78%), #fffaf2 !important;
+    color: #111111 !important;
+  }
+  [data-testid="stAppViewContainer"]::before {
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-image: linear-gradient(rgba(17,17,17,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(17,17,17,0.035) 1px, transparent 1px) !important;
+    background-size: 38px 38px;
+    opacity: 0.55;
+  }
+  [data-testid="stAppViewContainer"]::after { display: none !important; }
+  [data-testid="stSidebar"] {
+    background: rgba(255,255,255,0.86) !important;
+    border-right: 1px solid rgba(17,17,17,0.10) !important;
+    box-shadow: 12px 0 40px rgba(17,17,17,0.05) !important;
+    backdrop-filter: blur(18px);
+  }
+
+  h1, .hero-title { background: none !important; -webkit-text-fill-color: #111111 !important; color: #111111 !important; letter-spacing: 0 !important; }
+  h2, h3 { color: #111111 !important; letter-spacing: 0 !important; }
+  p, li, label, span { letter-spacing: 0 !important; }
+  .brand-wordmark { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 0; font-weight: 900; letter-spacing: 0 !important; line-height: 1; }
+  .brand-wordmark .brand-pink { color: #d81159; }
+  .brand-wordmark .brand-black { color: #111111; }
+  .brand-mark { width: 34px; height: 34px; display: inline-grid; place-items: center; border-radius: 10px; background: #111111; color: #d81159; font-weight: 900; box-shadow: 5px 5px 0 #ffbf00; }
+
+  .hero-banner { background: rgba(255,255,255,0.78) !important; border: 1px solid rgba(17,17,17,0.10) !important; border-radius: 18px !important; box-shadow: 0 18px 60px rgba(17,17,17,0.08) !important; }
+  .hero-banner::before { content: '' !important; right: 1.5rem; width: 110px; height: 110px; border-radius: 30px; background: linear-gradient(135deg, #d81159 0%, #ffbf00 100%); opacity: 0.22 !important; transform: translateY(-50%) rotate(10deg) !important; }
+  .hero-sub strong { color: #111111 !important; }
+  .card, .card-accent, [data-testid="metric-container"], [data-testid="stExpander"] { background: rgba(255,255,255,0.82) !important; border: 1px solid rgba(17,17,17,0.10) !important; box-shadow: 0 14px 36px rgba(17,17,17,0.06) !important; }
+  .card:hover, [data-testid="metric-container"]:hover, [data-testid="stExpander"]:hover { border-color: rgba(255,128,199,0.55) !important; box-shadow: 0 18px 48px rgba(255,128,199,0.16) !important; }
+  .card-accent { background: linear-gradient(135deg, rgba(255,128,199,0.12), rgba(255,191,0,0.12)) !important; }
+
+  .stButton > button, [data-testid="stButton"] button[kind="primary"] { background: #111111 !important; color: #fffaf2 !important; border: 1px solid #111111 !important; border-radius: 10px !important; box-shadow: 5px 5px 0 #ff80c7 !important; transform: translate(0,0) !important; font-weight: 700 !important; }
+  .stButton > button:hover, [data-testid="stButton"] button[kind="primary"]:hover { background: #d81159 !important; color: #ffffff !important; box-shadow: 5px 5px 0 #ffbf00 !important; transform: translate(-1px,-1px) !important; border-color: #d81159 !important; }
+  .sidebar-nav .stButton > button, .sidebar-nav-disabled .stButton > button { background: transparent !important; color: #4d463d !important; box-shadow: none !important; border-color: transparent !important; }
+  .sidebar-nav-active .stButton > button { background: rgba(255,128,199,0.16) !important; color: #d81159 !important; border-color: rgba(255,128,199,0.38) !important; box-shadow: none !important; }
+
+  [data-testid="stFileUploader"] { background: rgba(255,255,255,0.76) !important; border: 2px dashed rgba(255,128,199,0.62) !important; }
+  [data-testid="stFileUploader"]:hover { background: rgba(255,191,0,0.08) !important; border-color: #111111 !important; }
+  .stProgress > div > div { background: rgba(17,17,17,0.08) !important; }
+  .stProgress > div > div > div, .score-bar-fill { background: linear-gradient(90deg, #d81159, #ffbf00) !important; }
+
+  .step-badge { background: #111111 !important; color: #fffaf2 !important; box-shadow: 4px 4px 0 #ffbf00 !important; }
+  .step-badge.running { background: #d81159 !important; color: #ffffff !important; animation: selected-pulse 1.45s ease-in-out infinite !important; }
+  .step-badge.done { background: #10a66a !important; box-shadow: 4px 4px 0 #ffbf00 !important; }
+  .step-row.running { background: rgba(255,128,199,0.12) !important; }
+  .step-row.done { background: rgba(16,166,106,0.09) !important; }
+  @keyframes selected-pulse { 0%, 100% { transform: translateY(0) scale(1); box-shadow: 4px 4px 0 #ffbf00; } 50% { transform: translateY(-2px) scale(1.04); box-shadow: 7px 7px 0 rgba(255,191,0,0.65); } }
+
+  .loading-stage { position: relative; overflow: hidden; min-height: 280px; padding: 2.5rem; margin: 1rem 0; border-radius: 24px; background: #111111; color: #fffaf2; box-shadow: 0 30px 80px rgba(17,17,17,0.25); border: 1px solid rgba(255,128,199,0.2); }
+  .loading-stage::before { content: '' !important; position: absolute; inset: -30%; background: radial-gradient(circle at 50% 50%, rgba(255,128,199,0.15) 0%, rgba(255,191,0,0.1) 40%, transparent 70%); animation: loading-spin 8s linear infinite; pointer-events: none; }
+  .loading-topline { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; position: relative; z-index: 2; }
+  .loading-chip { border: 1px solid rgba(255,128,199,0.3); border-radius: 999px; padding: 0.4rem 0.9rem; font-size: 0.72rem; font-weight: 700; color: #ff80c7; background: rgba(255,128,199,0.1); letter-spacing: 0.05em !important; text-transform: uppercase; }
+  .loading-title { font-size: clamp(2rem, 3.5vw, 2.75rem); font-weight: 900; line-height: 1.1; margin: 0 0 1rem; color: #fffaf2; letter-spacing: -0.02em !important; position: relative; z-index: 2; }
+  .loading-title .hot { background: linear-gradient(135deg, #ff80c7 0%, #ffbf00 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .loading-detail { color: rgba(255,250,242,0.75); max-width: 600px; margin-bottom: 2.2rem; font-size: 0.95rem; line-height: 1.6; position: relative; z-index: 2; }
+  .loading-rail { display: grid; gap: 0.75rem; max-width: 100%; position: relative; z-index: 2; }
+  .loading-scan-row { height: 6px; border-radius: 999px; background: rgba(255,250,242,0.08); overflow: hidden; position: relative; }
+  .loading-scan-row span { display: block; width: 30%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ff80c7, #ffbf00); animation: loading-scan-glow 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+  .loading-scan-row:nth-child(2) span { animation-delay: 0.3s; width: 45%; }
+  .loading-scan-row:nth-child(3) span { animation-delay: 0.6s; width: 20%; }
+  .loading-scan-row:nth-child(4) span { animation-delay: 0.9s; width: 35%; }
+  @keyframes loading-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  @keyframes loading-scan-glow { 0% { transform: translateX(-120%); } 50% { transform: translateX(250%); } 100% { transform: translateX(250%); } }
+
+  code { background: rgba(255,128,199,0.16) !important; color: #111111 !important; }
+  ::-webkit-scrollbar-track { background: #fffaf2; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,128,199,0.65); }
+</style>
+""", unsafe_allow_html=True)
+
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Session State
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def init_session_state():
+    defaults = {
+        "page": "upload",
+        "jd_parse_result": None,
+        "frozen_rubric": None,
+        "pipeline_run": None,
+        "jd_file_path": None,
+        "resume_file_paths": [],
+        "progress_updates": [],
+        "run_complete": False,
+        "run_error": None,
+        "is_jsonl_mode": False,
+        "jsonl_file_path": None,
+        "jsonl_llm_top_n": 50,
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+init_session_state()
+
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Helpers
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def score_color(score: float) -> str:
+    if score >= 7: return "#34d399"
+    if score >= 5: return "#fbbf24"
+    return "#fb7185"
+
+def score_pill_cls(score: float) -> str:
+    if score >= 7: return "pill pill-high"
+    if score >= 5: return "pill pill-mid"
+    return "pill pill-low"
+
+def conf_pill_cls(conf: str) -> str:
+    m = {"high": "pill-high", "medium": "pill-mid", "low": "pill-low"}
+    return f"pill {m.get(conf.lower(), 'pill-low')}"
+
+def pill_html(text: str, cls: str) -> str:
+    return f'<span class="{cls}">{text}</span>'
+
+
+def brand_wordmark(size: str = "1.1rem", light_bg: bool = True) -> str:
+    pink_color = "#d81159" if light_bg else "#ff80c7"
+    black_color = "#111111" if light_bg else "#fffaf2"
+    return (
+        f'<span class="brand-wordmark" style="font-size:{size}; font-weight:900;">'
+        f'<span style="color:{pink_color};">ResumeGot</span>'
+        f'<span style="color:{black_color};">Selected.Ai</span>'
+        '</span>'
+    )
+
+
+def render_loading_stage_html(title: str, detail: str, chip: str = "LIVE MATCH RUN") -> str:
+    return f"""
+    <div class="loading-stage">
+      <div class="loading-topline">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="brand-mark" style="background:#fffaf2; color:#d81159; box-shadow: 4px 4px 0 #ffbf00;">R</span>
+          {brand_wordmark("1.05rem", light_bg=False)}
+        </div>
+        <span class="loading-chip">{chip}</span>
+      </div>
+      <div class="loading-title"><span class="hot">{title}</span><br>ranking with receipts.</div>
+      <div class="loading-detail">{detail}</div>
+      <div class="loading-rail" aria-hidden="true">
+        <div class="loading-scan-row"><span></span></div>
+        <div class="loading-scan-row"><span></span></div>
+        <div class="loading-scan-row"><span></span></div>
+        <div class="loading-scan-row"><span></span></div>
+      </div>
+    </div>
+    """
+
+
+def render_loading_stage(title: str, detail: str, chip: str = "LIVE MATCH RUN") -> None:
+    st.markdown(render_loading_stage_html(title, detail, chip), unsafe_allow_html=True)
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Sidebar
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def render_sidebar():
+    with st.sidebar:
+        # Logo / Brand
+        st.markdown(f"""
+        <div style="padding: 1.5rem 1.25rem 1rem 1.25rem; border-bottom: 1px solid rgba(17,17,17,0.10);">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+            <span class="brand-mark">R</span>
+            {brand_wordmark("1.06rem")}
+          </div>
+          <div style="font-size:0.74rem; color:#4d463d; padding-left:2px;">Private resume shortlisting with evidence</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='padding:0 8px; font-size:0.7rem; color:#948a7c; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:4px;'>Navigation</div>", unsafe_allow_html=True)
+
+        pages = [
+            ("upload",     "ðŸ“‚", "Upload Files"),
+            ("calibrate",  "âš™ï¸",  "Calibrate Rubric"),
+            ("processing", "âš¡", "Processing"),
+            ("results",    "ðŸ“Š", "Results"),
+        ]
+
+        for page_id, icon, label in pages:
+            is_active = st.session_state.page == page_id
+            is_disabled = True
+            if page_id == "upload":
+                is_disabled = False
+            elif page_id == "calibrate":
+                is_disabled = st.session_state.jd_parse_result is None
+            elif page_id == "processing":
+                is_disabled = st.session_state.frozen_rubric is None
+            elif page_id == "results":
+                is_disabled = st.session_state.pipeline_run is None
+
+            if is_active:
+                css_cls = "sidebar-nav-active"
+                dot = "<span class='nav-dot'></span>" if page_id == "processing" and not st.session_state.run_complete else ""
+            elif is_disabled:
+                css_cls = "sidebar-nav-disabled"
+                dot = "<span class='nav-lock'>ðŸ”’</span>"
+            else:
+                css_cls = "sidebar-nav"
+                dot = ""
+
+            st.markdown(f'<div class="{css_cls}">', unsafe_allow_html=True)
+            if st.button(f"{icon}  {label}", key=f"nav_btn_{page_id}", disabled=is_disabled, use_container_width=True):
+                st.session_state.page = page_id
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # Model info
+        st.markdown("""
+        <div style="border-top:1px solid rgba(255,128,199,0.15); margin-top:12px; padding:12px 16px 4px;">
+          <div style="font-size:0.7rem; color:#948a7c; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:8px;">System</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div style="padding:0 12px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#ffbf00;flex-shrink:0;"></span>
+            <span style="font-size:0.78rem; color:#4d463d;">LLM: <code style="font-size:0.75rem">{settings.ollama_model}</code></span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#ff80c7;flex-shrink:0;"></span>
+            <span style="font-size:0.78rem; color:#4d463d;">Embeddings: <code style="font-size:0.75rem">bge-small</code></span>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("ðŸ” Check Ollama", key="sidebar_ollama_check"):
+            with st.spinner("Checking connectivity..."):
+                ok = llm_client.check_connectivity()
+            if ok:
+                st.success(f"âœ… Ollama ready")
+            else:
+                st.error(f"âŒ Not reachable Â· Run: `ollama pull {settings.ollama_model}`")
+
+        # Recent runs
+        runs_dir = Path(settings.runs_dir)
+        if runs_dir.exists():
+            run_dirs = sorted(
+                [d for d in runs_dir.iterdir() if d.is_dir()],
+                key=lambda d: d.stat().st_mtime,
+                reverse=True,
+            )[:5]
+            if run_dirs:
+                st.markdown("""
+                <div style="border-top:1px solid rgba(255,128,199,0.12); margin-top:12px; padding:12px 16px 4px;">
+                  <div style="font-size:0.7rem; color:#948a7c; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:8px;">Recent Runs</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                for rd in run_dirs:
+                    candidates_dir = rd / "candidates"
+                    n_cands = len(list(candidates_dir.glob("*.json"))) if candidates_dir.exists() else 0
+                    run_label = rd.name[:14] + ("â€¦" if len(rd.name) > 14 else "")
+
+                    col_run, col_load = st.columns([3, 1])
+                    with col_run:
+                        st.markdown(f"<div style='font-size:0.78rem;color:#4d463d;padding:2px 12px'>ðŸ“ `{run_label}` <span style='color:#948a7c'>({n_cands})</span></div>", unsafe_allow_html=True)
+                    with col_load:
+                        if st.button("â†—", key=f"load_run_{rd.name}", help="Load this run"):
+                            _load_run(rd)
+
+        # Footer
+        st.markdown("""
+        <div style="border-top:1px solid rgba(255,128,199,0.12); margin-top:16px; padding:12px 16px;">
+          <div style="font-size:0.72rem; color:#948a7c; text-align:center; line-height:1.6;">
+            100% local Â· No data leaves your machine<br>Evidence-grounded Â· Explainable ranking
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+def _load_run(rd):
+    """Load a previous run from disk."""
+    rubric_path = rd / "rubric.json"
+    if not rubric_path.exists():
+        st.error("Rubric not found for this run.")
+        return
+    try:
+        import json as _json
+        rubric_data = _json.loads(rubric_path.read_text(encoding="utf-8"))
+        loaded_rubric = FrozenRubric.model_validate(rubric_data)
+        st.session_state.frozen_rubric = loaded_rubric
+
+        candidates_dir = rd / "candidates"
+        ranked_candidates, excluded_candidates = [], []
+        if candidates_dir.exists():
+            for f in candidates_dir.glob("*.json"):
+                cand_data = _json.loads(f.read_text(encoding="utf-8"))
+                cand_record = CandidateRecord.model_validate(cand_data)
+                if cand_record.excluded:
+                    excluded_candidates.append(cand_record)
+                else:
+                    ranked_candidates.append(cand_record)
+        ranked_candidates.sort(key=lambda x: x.rank if x.rank is not None else 9999)
+
+        total_submitted, shortlisted_count = 0, 0
+        html_path = rd / "run_report.html"
+        if html_path.exists():
+            import re as _re
+            html_text = html_path.read_text(encoding="utf-8")
+            sub_match = _re.search(r"Submitted:\s*<strong>(\d+)</strong>", html_text)
+            if sub_match: total_submitted = int(sub_match.group(1))
+            short_match = _re.search(r"Shortlisted:\s*<strong>(\d+)</strong>", html_text)
+            if short_match: shortlisted_count = int(short_match.group(1))
+        if total_submitted == 0: total_submitted = len(ranked_candidates) + len(excluded_candidates)
+        if shortlisted_count == 0: shortlisted_count = len(ranked_candidates) + len(excluded_candidates)
+
+        # Load structured scores if JSONL mode was used
+        structured_scores = []
+        scores_file = rd / "structured_scores.json"
+        if scores_file.exists():
+            from schemas.candidate import StructuredCandidateScore
+            import json as _json
+            try:
+                scores_data = _json.loads(scores_file.read_text(encoding="utf-8"))
+                structured_scores = [StructuredCandidateScore.model_validate(s) for s in scores_data]
+                st.session_state.is_jsonl_mode = True
+            except Exception as se:
+                logging.warning(f"Failed to load structured_scores.json: {se}")
+
+        from schemas.candidate import RankedShortlist
+        from pipeline.orchestrator import PipelineRun
+        shortlist = RankedShortlist(
+            run_id=rd.name,
+            job_title=loaded_rubric.job_title,
+            total_resumes_submitted=total_submitted,
+            shortlisted_count=shortlisted_count,
+            ranked_candidates=ranked_candidates,
+            excluded_candidates=excluded_candidates,
+            rubric_used=loaded_rubric.model_dump(mode="json"),
+        )
+        st.session_state.pipeline_run = PipelineRun(
+            run_id=rd.name, run_dir=rd, frozen_rubric=loaded_rubric,
+            shortlist=shortlist, completed=True,
+            structured_scores=structured_scores
+        )
+        st.session_state.run_complete = True
+        st.session_state.page = "results"
+        st.rerun()
+    except Exception as e:
+        st.error(f"Failed to load run: {e}")
+
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Page 1: Upload
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def page_upload():
+    # Hero banner
+    st.markdown(f"""
+    <div class="hero-banner">
+      <div class="hero-title">{brand_wordmark("2rem")}</div>
+      <div class="hero-sub">Upload a job description and candidate resumes, then get a sharper shortlist with evidence attached.<br>
+      Built for private, local screening that feels fast, deliberate, and reviewable.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # System status (collapsed by default)
+    with st.expander("ðŸ”§ System Status", expanded=False):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown("**LLM â€” Ollama**")
+            if st.button("ðŸ”„ Test Connection", key="refresh_health"):
+                with st.spinner("Checking..."):
+                    ok = llm_client.check_connectivity()
+                st.success("âœ… Connected") if ok else st.error("âŒ Not reachable")
+            st.caption(f"Model: `{settings.ollama_model}`")
+            st.caption(f"URL: `{settings.ollama_base_url}`")
+        with c2:
+            st.markdown("**Embedding Model**")
+            cache_dir = Path(settings.embeddings_cache_dir)
+            cache_ok = cache_dir.exists() and any(cache_dir.iterdir()) if cache_dir.exists() else False
+            st.success("âœ… Cache ready") if cache_ok else st.warning("âš ï¸ Will download on first run")
+            st.caption(f"Model: `{settings.embedding_model}`")
+        with c3:
+            st.markdown("**Data Directories**")
+            dirs_ok = all(Path(d).exists() for d in [settings.uploads_dir, settings.runs_dir])
+            st.success("âœ… Directories ready") if dirs_ok else st.warning("âš ï¸ Will be created automatically")
+
+    st.markdown("---")
+
+    # Demo mode
+    fixtures_dir = Path(__file__).resolve().parents[1] / "tests" / "fixtures"
+    if fixtures_dir.exists():
+        col_demo, _ = st.columns([1, 3])
+        with col_demo:
+            if st.button("ðŸŽ® Load Demo Data", help="Uses fixture files â€” requires Ollama"):
+                demo_files = list(fixtures_dir.glob("resume_*.txt"))
+                demo_jd = fixtures_dir / "jd_software_engineer.txt"
+                if demo_jd.exists() and demo_files:
+                    st.session_state.jd_file_path = str(demo_jd)
+                    st.session_state.resume_file_paths = [str(f) for f in demo_files]
+                    try:
+                        with st.spinner("Loading demo rubric..."):
+                            result = run_step1_only(demo_jd)
+                        st.session_state.jd_parse_result = result
+                        st.session_state.page = "calibrate"
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Demo failed (Ollama required): {e}")
+                else:
+                    st.warning("Demo fixtures not found.")
+
+    # â”€â”€ Mode A: PDF/DOCX Resumes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    st.markdown("## ðŸ“„ Mode A â€” Job Description + Resume Files")
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 1], gap="large")
+    with col1:
+        st.markdown("**Job Description** *(PDF / DOCX / TXT)*")
+        jd_file = st.file_uploader(
+            "Upload JD", type=["pdf", "docx", "txt"], key="jd_uploader",
+            help="Parses the role and generates an evidence-first rubric.",
+            label_visibility="collapsed",
+        )
+        if jd_file:
+            st.markdown(f'<div class="stat-badge teal">âœ“ {jd_file.name}</div>', unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("**Candidate Resumes** *(multiple files OK)*")
+        resume_files = st.file_uploader(
+            "Upload Resumes", type=["pdf", "docx", "txt"],
+            accept_multiple_files=True, key="resume_uploader",
+            help="Upload all resumes at once.",
+            label_visibility="collapsed",
+        )
+        if resume_files:
+            st.markdown(f'<div class="stat-badge teal">âœ“ {len(resume_files)} resume(s) ready</div>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    can_proceed = jd_file is not None and len(resume_files or []) >= 1
+    col_btn, col_note = st.columns([2, 3])
+    with col_btn:
+        if st.button("ðŸš€ Parse JD & Generate Rubric", disabled=not can_proceed, type="primary"):
+            with st.spinner("Parsing JD and generating AI rubricâ€¦ (30â€“60s)"):
+                upload_dir = Path(settings.uploads_dir) / uuid.uuid4().hex[:8]
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                jd_path = upload_dir / jd_file.name
+                jd_path.write_bytes(jd_file.getvalue())
+                resume_paths = []
+                for rf in resume_files:
+                    rp = upload_dir / rf.name
+                    rp.write_bytes(rf.getvalue())
+                    resume_paths.append(str(rp))
+                st.session_state.jd_file_path = str(jd_path)
+                st.session_state.resume_file_paths = resume_paths
+                try:
+                    result = run_step1_only(jd_path)
+                    st.session_state.jd_parse_result = result
+                    st.session_state.page = "calibrate"
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"âŒ JD parsing failed: {e}")
+    with col_note:
+        if not can_proceed:
+            st.info("ðŸ“Œ Upload a JD and at least one resume to continue.")
+
+    st.markdown("---")
+
+    # â”€â”€ Mode B: JSONL Pool â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    st.markdown("## ðŸ—„ï¸ Mode B â€” Structured Candidate Pool (JSONL)")
+    st.markdown("""
+    <div class="card-accent" style="margin-bottom:1rem;">
+      <div style="font-size:0.88rem; color:#ff80c7; font-weight:600; margin-bottom:6px;">âœ¦ High-volume pool mode</div>
+      <div style="font-size:0.83rem; color:#4d463d;">Upload a <code>candidates.jsonl</code> file (up to 100,000 structured profiles).
+      Behavioral scoring runs on <strong>all</strong> candidates without LLM calls.
+      Full evidence-grounded scoring runs on the top-N shortlisted candidates.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    col3, col4 = st.columns([1, 1], gap="large")
+    with col3:
+        st.markdown("**Job Description** *(PDF / DOCX / TXT)*")
+        jsonl_jd_file = st.file_uploader(
+            "JD for pool", type=["pdf", "docx", "txt"], key="jsonl_jd_uploader",
+            label_visibility="collapsed",
+        )
+        if jsonl_jd_file:
+            st.markdown(f'<div class="stat-badge teal">âœ“ {jsonl_jd_file.name}</div>', unsafe_allow_html=True)
+
+    with col4:
+        st.markdown("**Candidate Pool** *(JSONL format)*")
+        jsonl_file = st.file_uploader(
+            "Candidate pool", type=["jsonl", "json"], key="jsonl_uploader",
+            help="Upload candidates.jsonl â€” 100K profiles supported.",
+            label_visibility="collapsed",
+        )
+        if jsonl_file:
+            st.markdown(f'<div class="stat-badge teal">âœ“ {jsonl_file.name}</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    can_proceed_jsonl = jsonl_jd_file is not None and jsonl_file is not None
+    col_btn2, col_note2 = st.columns([2, 3])
+    with col_btn2:
+        if st.button("ðŸš€ Parse JD & Score Candidate Pool", disabled=not can_proceed_jsonl, key="btn_jsonl_start", type="primary"):
+            with st.spinner("Parsing JD and generating AI rubricâ€¦"):
+                upload_dir = Path(settings.uploads_dir) / uuid.uuid4().hex[:8]
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                jd_path = upload_dir / jsonl_jd_file.name
+                jd_path.write_bytes(jsonl_jd_file.getvalue())
+                jsonl_path = upload_dir / jsonl_file.name
+                jsonl_path.write_bytes(jsonl_file.getvalue())
+                st.session_state.jd_file_path = str(jd_path)
+                st.session_state.jsonl_file_path = str(jsonl_path)
+                st.session_state.resume_file_paths = []
+                st.session_state.is_jsonl_mode = True
+                try:
+                    result = run_step1_only(jd_path)
+                    st.session_state.jd_parse_result = result
+                    st.session_state.page = "calibrate"
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"âŒ JD parsing failed: {e}")
+    with col_note2:
+        if not can_proceed_jsonl:
+            st.info("ðŸ“Œ Upload a JD and a JSONL candidate pool to use this mode.")
+
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Page 2: Calibrate
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def page_calibrate():
+    result = st.session_state.jd_parse_result
+    if not result:
+        st.warning("âš ï¸ Please upload and parse a JD first.")
+        st.session_state.page = "upload"
+        st.rerun()
+        return
+
+    rubric = result.rubric
+
+    st.markdown(f"""
+    <div class="hero-banner">
+      <div class="hero-title">âš™ï¸ Calibrate Rubric</div>
+      <div class="hero-sub">Evaluation rubric for <strong>{rubric.job_title}</strong>.<br>
+      Tune weights, gates, and bonus sensitivity before the shortlist run starts.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if result.warnings:
+        for w in result.warnings:
+            st.warning(w)
+
+    with st.expander("ðŸ“„ View Extracted JD Text", expanded=False):
+        st.code(result.jd_text[:3000], language=None)
+
+    st.markdown("---")
+
+    # Criteria
+    st.markdown("## ðŸ“Š Weighted Criteria")
+    st.markdown("""
+    <div style="font-size:0.83rem; color:#4d463d; margin-bottom:1rem; padding:10px 14px;
+    background:rgba(255,128,199,0.06); border-radius:8px; border-left:3px solid #111111;">
+      ðŸ’¡ Adjust sliders to set relative importance. Weights auto-normalize to 1.0.
+      Check <strong>â­ Priority</strong> to apply a Ã—1.15 boost to that criterion.
+    </div>
+    """, unsafe_allow_html=True)
+
+    updated_criteria = []
+    new_weights = []
+    for i, criterion in enumerate(rubric.weighted_criteria):
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        col_main, col_star = st.columns([5, 1])
+        with col_main:
+            cat_color = "#ffbf00" if "Hard" in criterion.category else "#ff80c7"
+            st.markdown(
+                f"<div style='font-size:0.95rem; font-weight:700; color:#111111; margin-bottom:2px;'>{criterion.criterion}</div>"
+                f"<div style='display:inline-flex; align-items:center; gap:6px; margin-bottom:8px;'>"
+                f"<span style='background:rgba({','.join(str(int(cat_color[i:i+2],16)) for i in (1,3,5))},0.15); "
+                f"color:{cat_color}; font-size:0.72rem; font-weight:600; padding:2px 8px; border-radius:100px; "
+                f"border:1px solid rgba({','.join(str(int(cat_color[i:i+2],16)) for i in (1,3,5))},0.3);'>{criterion.category}</span>"
+                f"<span style='color:#948a7c; font-size:0.78rem;'>Weight: {criterion.weight:.2f}</span></div>",
+                unsafe_allow_html=True,
+            )
+            st.caption(f"*{criterion.rationale}*")
+            new_weight = st.slider(
+                f"w{i}", min_value=0.01, max_value=0.50,
+                value=float(criterion.weight), step=0.01,
+                key=f"weight_{criterion.id}", label_visibility="collapsed", format="%.2f",
+            )
+        with col_star:
+            st.markdown("<br>", unsafe_allow_html=True)
+            is_priority = st.checkbox("â­ Priority", key=f"priority_{criterion.id}", help="Boost Ã—1.15")
+
+        final_weight = new_weight * 1.15 if is_priority else new_weight
+        new_weights.append(final_weight)
+        updated_criteria.append(WeightedCriterion(
+            id=criterion.id, criterion=criterion.criterion,
+            category=criterion.category, weight=final_weight,
+            rationale=criterion.rationale,
+        ))
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Auto-normalize
+    normalized_weight_total = sum(c.weight for c in updated_criteria)
+    if abs(normalized_weight_total - 1.0) > 0.02:
+        for c in updated_criteria:
+            c.weight = round(c.weight / normalized_weight_total, 6)
+
+    display_total = sum(c.weight for c in updated_criteria)
+    col_wt, _ = st.columns([1, 4])
+    with col_wt:
+        if 0.98 <= display_total <= 1.02:
+            st.success(f"âœ… Weights sum: {display_total:.2f}")
+        else:
+            st.warning(f"âš ï¸ Weights: {display_total:.2f} (auto-normalizing)")
+
+    st.markdown("---")
+
+    # Hard Gates
+    st.markdown("## ðŸš§ Hard Gates")
+    updated_gates = []
+    if rubric.hard_gates:
+        st.markdown("""
+        <div style="font-size:0.83rem; color:#4d463d; margin-bottom:1rem; padding:10px 14px;
+        background:rgba(251,113,133,0.06); border-radius:8px; border-left:3px solid #fb7185;">
+          ðŸš§ <strong>Strict</strong> = candidate excluded if not met. <strong>Flexible</strong> = heavy penalty but still ranked.
+        </div>
+        """, unsafe_allow_html=True)
+        for i, gate in enumerate(rubric.hard_gates):
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            col_g, col_s = st.columns([4, 1])
+            with col_g:
+                st.markdown(f"<div style='font-size:0.92rem; font-weight:600; color:#111111;'>ðŸ”’ {gate.criterion}</div>", unsafe_allow_html=True)
+            with col_s:
+                strict = st.toggle("Strict", value=gate.strict, key=f"gate_strict_{i}_{gate.criterion[:20]}")
+            updated_gates.append(HardGate(criterion=gate.criterion, strict=strict))
+            st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.info("â„¹ï¸ No hard gates identified in this JD.")
+
+    st.markdown("---")
+
+    # Bonus Sensitivity
+    st.markdown("## ðŸŒŸ Bonus Signal Sensitivity")
+    st.markdown("""
+    <div style="font-size:0.83rem; color:#4d463d; margin-bottom:1rem;">
+      Controls how much weight exceptional achievements (outside the rubric) add to the final score.
+    </div>
+    """, unsafe_allow_html=True)
+    bonus_sensitivity = st.radio(
+        "Bonus Sensitivity", options=["off", "low", "medium", "high"],
+        index=2, horizontal=True, label_visibility="collapsed",
+    )
+
+    st.markdown("---")
+
+    # JSONL-specific controls
+    if st.session_state.get("is_jsonl_mode"):
+        st.markdown("## ðŸ”„ JSONL Pool Settings")
+        jsonl_top_n = st.slider(
+            "LLM deep-scoring top N candidates",
+            min_value=10, max_value=200,
+            value=st.session_state.get("jsonl_llm_top_n", 50), step=10,
+            key="slider_jsonl_top_n",
+            help="Behavioral scoring runs on ALL candidates. LLM scoring runs on top N only.",
+        )
+        st.session_state.jsonl_llm_top_n = jsonl_top_n
+        st.markdown(f"""
+        <div class="card-accent">
+          <div style="font-size:0.88rem; color:#ff80c7; font-weight:600;">ðŸ”„ JSONL Mode Active</div>
+          <div style="font-size:0.82rem; color:#4d463d; margin-top:4px;">
+            Fast behavioral scoring runs on <strong>all</strong> candidates in the pool.<br>
+            Evidence-grounded LLM scoring runs on the top <strong>{jsonl_top_n}</strong> shortlisted candidates.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        candidate_pool_info = "JSONL candidate pool"
+    else:
+        candidate_pool_info = f"{len(st.session_state.resume_file_paths)} resume(s)"
+
+    resume_count = len(st.session_state.resume_file_paths)
+    if resume_count > 30:
+        criteria_count = len(updated_criteria)
+        est_minutes = resume_count * criteria_count * 0.5
+        st.warning(
+            f"âš ï¸ {resume_count} resumes Ã— {criteria_count} criteria â‰ˆ {est_minutes:.0f} min estimated. "
+            f"Consider reducing SHORTLIST_TOP_K for faster results."
+        )
+
+    col_ev, col_back = st.columns([2, 1])
+    with col_ev:
+        if st.button(f"âš¡ Evaluate {candidate_pool_info} â€” Freeze Rubric & Start", type="primary"):
+            total_w = sum(c.weight for c in updated_criteria)
+            for c in updated_criteria:
+                c.weight = round(c.weight / total_w, 6)
+            try:
+                frozen = FrozenRubric(
+                    job_title=rubric.job_title,
+                    hard_gates=updated_gates,
+                    weighted_criteria=updated_criteria,
+                    bonus_sensitivity=bonus_sensitivity,
+                ).freeze()
+                st.session_state.frozen_rubric = frozen
+                st.session_state.progress_updates = []
+                st.session_state.run_complete = False
+                st.session_state.run_error = None
+                st.session_state.pipeline_run = None
+                st.session_state.pop("pipeline_thread", None)
+                st.session_state.pop("progress_q", None)
+                st.session_state.pop("pipeline_start_time", None)
+                st.session_state.page = "processing"
+                st.rerun()
+            except Exception as e:
+                st.error(f"âŒ Rubric validation failed: {e}")
+    with col_back:
+        if st.button("â† Back to Upload"):
+            st.session_state.page = "upload"
+            st.rerun()
+
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Page 3: Processing
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def page_processing():
+    frozen_rubric = st.session_state.frozen_rubric
+    if not frozen_rubric:
+        st.session_state.page = "calibrate"
+        st.rerun()
+        return
+
+    st.markdown(f"""
+    <div class="hero-banner">
+      <div class="hero-title">Selection run in motion</div>
+      <div class="hero-sub">Evaluating candidates for <strong>{frozen_rubric.job_title}</strong>.<br>
+      The rubric is locked, so every profile is judged on the same evidence.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    loading_placeholder = st.empty()
+    if not st.session_state.run_complete:
+        loading_placeholder.markdown(
+            render_loading_stage_html(
+                "Reading the field",
+                "ResumeGotSelected.Ai is parsing signals, checking evidence, and building a ranked shortlist without breaking the visual flow."
+            ),
+            unsafe_allow_html=True
+        )
+
+    if not st.session_state.run_complete and st.session_state.pipeline_run is None:
+        if "pipeline_thread" not in st.session_state:
+            progress_q = queue.Queue()
+            st.session_state.progress_q = progress_q
+
+            # Extract session state values outside the background thread since st.session_state is not thread-local accessible there
+            jd_file_path = st.session_state.jd_file_path
+            is_jsonl_mode = st.session_state.get("is_jsonl_mode", False)
+            jsonl_file_path = st.session_state.get("jsonl_file_path")
+            jsonl_llm_top_n = st.session_state.get("jsonl_llm_top_n", settings.jsonl_llm_deep_score_top_n)
+            resume_file_paths = st.session_state.resume_file_paths
+
+            def run_pipeline_thread():
+                def progress_cb(update: ProgressUpdate):
+                    progress_q.put(update)
+                if is_jsonl_mode:
+                    run = run_jsonl_pipeline(
+                        jd_file_path=jd_file_path,
+                        jsonl_path=jsonl_file_path,
+                        frozen_rubric=frozen_rubric,
+                        progress_cb=progress_cb,
+                        llm_deep_score_top_n=jsonl_llm_top_n,
+                    )
+                else:
+                    run = run_full_pipeline(
+                        jd_file_path=jd_file_path,
+                        resume_file_paths=resume_file_paths,
+                        frozen_rubric=frozen_rubric,
+                        progress_cb=progress_cb,
+                    )
+                progress_q.put(run)
+
+            thread = threading.Thread(target=run_pipeline_thread, daemon=True)
+            thread.start()
+            st.session_state.pipeline_thread = thread
+            pipeline_start_time = time.time()
+            st.session_state.pipeline_start_time = pipeline_start_time
+        else:
+            progress_q = st.session_state.progress_q
+            thread = st.session_state.pipeline_thread
+            pipeline_start_time = st.session_state.pipeline_start_time
+
+        step_names = {
+            3: "Resume Ingestion & Indexing",
+            4: "Embedding Shortlisting",
+            5: "Evidence-Grounded Scoring",
+            6: "Parallel Analysis Passes",
+            7: "Final Scoring & Ranking",
+            8: "Output Generation",
+        }
+        if st.session_state.get("is_jsonl_mode"):
+            step_names[2] = "JSON Loading & Behavioral Scoring"
+
+        step_status = {k: "pending" for k in step_names}
+        step_placeholders = {}
+
+        # Pipeline step tracker
+        st.markdown("## Pipeline Steps")
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        for step_num in sorted(step_names):
+            step_placeholders[step_num] = st.empty()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        col_prog, col_detail = st.columns([2, 1])
+        with col_prog:
+            progress_bar = st.progress(0, text="Initializing pipelineâ€¦")
+        with col_detail:
+            elapsed_ph = st.empty()
+
+        detail_placeholder = st.empty()
+        log_container = st.expander("ðŸ“‹ Live Log", expanded=False)
+        with log_container:
+            log_placeholder = st.empty()
+
+        log_lines = []
+        total_steps = len(step_names)
+        completed_steps = 0
+
+        while thread.is_alive() or not progress_q.empty():
+            elapsed = time.time() - pipeline_start_time
+            elapsed_ph.markdown(f"<div style='text-align:right; font-size:0.82rem; color:#948a7c; padding-top:12px;'>â± {elapsed:.0f}s elapsed</div>", unsafe_allow_html=True)
+
+            if elapsed > 600:
+                st.session_state.run_error = "Pipeline timed out after 10 minutes."
+                break
+            try:
+                item = progress_q.get(timeout=0.5)
+            except queue.Empty:
+                _render_step_tracker(step_status, step_placeholders, step_names)
+                time.sleep(0.3)
+                continue
+
+            from pipeline.orchestrator import PipelineRun
+            if isinstance(item, PipelineRun):
+                st.session_state.pipeline_run = item
+                st.session_state.run_complete = True
+                if item.errors:
+                    st.session_state.run_error = item.errors[0]
+                break
+
+            update: ProgressUpdate = item
+            if update.error:
+                st.session_state.run_error = update.error
+                break
+
+            if update.step in step_status:
+                if update.done:
+                    step_status[update.step] = "done"
+                    completed_steps += 1
+                else:
+                    step_status[update.step] = "running"
+
+            progress_pct = completed_steps / total_steps
+            if update.total > 0:
+                sub_progress = (update.current / update.total) / total_steps
+                progress_pct = min((completed_steps) / total_steps + sub_progress / total_steps, 1.0)
+
+            progress_bar.progress(
+                min(progress_pct, 1.0),
+                text=f"Step {update.step} of {total_steps}: {update.step_name}"
+            )
+            # Dynamically update the premium loading stage panel
+            loading_placeholder.markdown(
+                render_loading_stage_html(
+                    update.step_name,
+                    update.detail,
+                    chip=f"STEP {update.step} OF {total_steps}"
+                ),
+                unsafe_allow_html=True
+            )
+
+            detail_placeholder.markdown(
+                f"<div style='font-size:0.85rem; color:#d81159; padding:6px 0;'>↳ {update.detail}</div>",
+                unsafe_allow_html=True,
+            )
+
+            if update.detail:
+                log_lines.append(f"[{elapsed:.1f}s] Step {update.step}: {update.detail}")
+                with log_container:
+                    log_placeholder.text_area(
+                        "Log", value="\n".join(log_lines[-25:]),
+                        height=180, disabled=True, label_visibility="collapsed",
+                    )
+
+            _render_step_tracker(step_status, step_placeholders, step_names)
+            time.sleep(0.1)
+
+    if st.session_state.run_error:
+        st.error(f"âŒ Pipeline error: {st.session_state.run_error}")
+        if st.button("â† Back to Calibration"):
+            st.session_state.page = "calibrate"
+            st.rerun()
+        return
+
+    if st.session_state.run_complete and st.session_state.pipeline_run:
+        run = st.session_state.pipeline_run
+        if run.shortlist:
+            n_ranked = len(run.shortlist.ranked_candidates)
+            n_excl = len(run.shortlist.excluded_candidates)
+            st.markdown(f"""
+            <div class="card-accent" style="margin-top:1rem;">
+              <div style="font-size:1rem; font-weight:700; color:#34d399; margin-bottom:8px;">âœ… Pipeline Complete!</div>
+              <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                <div class="stat-badge green">âœ“ {n_ranked} ranked</div>
+                <div class="stat-badge rose">âš¡ {n_excl} excluded</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("ðŸ“Š View Results â†’", type="primary"):
+                st.session_state.page = "results"
+                st.rerun()
+
+
+def _render_step_tracker(step_status, placeholders, step_names):
+    for step_num in sorted(placeholders.keys()):
+        placeholder = placeholders[step_num]
+        status = step_status[step_num]
+
+        if status == "done":
+            badge_cls = "step-badge done"
+            icon = "âœ“"
+            text_color = "#34d399"
+            row_cls = "done"
+        elif status == "running":
+            badge_cls = "step-badge running"
+            icon = "âŸ³"
+            text_color = "#ff80c7"
+            row_cls = "running"
+        elif status == "error":
+            badge_cls = "step-badge error"
+            icon = "âœ—"
+            text_color = "#fb7185"
+            row_cls = ""
+        else:
+            badge_cls = "step-badge"
+            icon = str(step_num)
+            text_color = "#948a7c"
+            row_cls = ""
+
+        placeholder.markdown(
+            f'<div class="step-row {row_cls}">'
+            f'<span class="{badge_cls}">{icon}</span>'
+            f'<span style="color:{text_color}; font-size:0.88rem; font-weight:{"600" if status in ("running","done") else "400"}">'
+            f'{step_names[step_num]}</span></div>',
+            unsafe_allow_html=True,
+        )
+
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Page 4: Results
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def page_results():
+    run = st.session_state.pipeline_run
+    if not run or not run.shortlist:
+        st.warning("No results yet. Complete a pipeline run first.")
+        return
+
+    shortlist = run.shortlist
+    rubric = st.session_state.frozen_rubric
+
+    st.markdown(f"""
+    <div class="hero-banner">
+      <div class="hero-title">Selected shortlist - {shortlist.job_title}</div>
+      <div class="hero-sub">Run ID: <code>{shortlist.run_id}</code> Â· Evidence-backed ranking complete.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # â”€â”€ KPI Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    top = shortlist.ranked_candidates[0] if shortlist.ranked_candidates else None
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1: st.metric("Submitted", shortlist.total_resumes_submitted)
+    with c2: st.metric("Shortlisted", shortlist.shortlisted_count)
+    with c3: st.metric("Ranked", len(shortlist.ranked_candidates))
+    with c4: st.metric("Excluded", len(shortlist.excluded_candidates))
+    with c5: st.metric("Top Score", f"{top.final_score:.2f}/10" if top else "â€”")
+
+    st.markdown("---")
+
+    # â”€â”€ Charts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    if shortlist.ranked_candidates:
+        col_chart, col_conf = st.columns([3, 1])
+
+        with col_chart:
+            st.markdown("## Score Distribution")
+            scores = [c.final_score for c in shortlist.ranked_candidates]
+            names = [c.name[:18] for c in shortlist.ranked_candidates]
+            fig = go.Figure(go.Bar(
+                x=names, y=scores,
+                marker=dict(
+                    color=scores,
+                    colorscale=[[0, '#fb7185'], [0.5, '#fbbf24'], [1.0, '#34d399']],
+                    cmin=0, cmax=10,
+                    line=dict(width=0),
+                ),
+                hovertemplate="<b>%{x}</b><br>Score: %{y:.2f}/10<extra></extra>",
+            ))
+            fig.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(17,24,39,0.6)",
+                font=dict(family="Inter", color="#4d463d", size=12),
+                xaxis=dict(tickangle=-35, gridcolor="rgba(255,255,255,0.05)", showgrid=False),
+                yaxis=dict(range=[0, 10.5], gridcolor="rgba(17,17,17,0.06)"),
+                showlegend=False,
+                height=300,
+                margin=dict(l=0, r=0, t=10, b=80),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col_conf:
+            st.markdown("## Confidence")
+            conf_counts = {"High": 0, "Medium": 0, "Low": 0}
+            for c in shortlist.ranked_candidates:
+                conf_counts[c.confidence] = conf_counts.get(c.confidence, 0) + 1
+            fig2 = go.Figure(go.Pie(
+                labels=list(conf_counts.keys()),
+                values=list(conf_counts.values()),
+                marker=dict(colors=["#34d399", "#fbbf24", "#fb7185"],
+                            line=dict(color="#fffaf2", width=2)),
+                hole=0.65,
+                textinfo="percent",
+                textfont=dict(size=11, color="#111111"),
+            ))
+            fig2.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(family="Inter", color="#4d463d"),
+                height=220,
+                margin=dict(l=0, r=0, t=10, b=10),
+                legend=dict(font=dict(size=11), orientation="h", y=-0.1),
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+
+    st.markdown("---")
+
+    # â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    all_tabs = ["ðŸ† Ranked Candidates", "ðŸš« Excluded", "ðŸ“‹ Rubric", "ðŸ“¥ Export"]
+    is_jsonl = st.session_state.get("is_jsonl_mode") and run.structured_scores
+    if is_jsonl:
+        all_tabs.append("ðŸ“Š Full Pool")
+
+    tabs = st.tabs(all_tabs)
+
+    with tabs[0]:
+        if not shortlist.ranked_candidates:
+            st.info("No candidates ranked â€” all excluded or none shortlisted.")
+        else:
+            # Heatmap
+            st.markdown("## Score Matrix â€” Top 10")
+            candidate_names = [c.name[:22] for c in shortlist.ranked_candidates[:10]]
+            criteria_names = [c.criterion[:28] for c in rubric.weighted_criteria]
+            score_matrix = []
+            for cand in shortlist.ranked_candidates[:10]:
+                score_map_h = {cs.criterion_id: cs.score for cs in cand.criterion_scores}
+                row = [score_map_h.get(crit.id, 0) for crit in rubric.weighted_criteria]
+                score_matrix.append(row)
+
+            if score_matrix:
+                fig_heat = go.Figure(go.Heatmap(
+                    z=score_matrix, x=criteria_names, y=candidate_names,
+                    colorscale=[[0,'#450a0a'], [0.35,'#78350f'], [0.7,'#065f46'], [1.0,'#34d399']],
+                    zmin=0, zmax=10,
+                    text=[[f"{v}" for v in row] for row in score_matrix],
+                    texttemplate="%{text}",
+                    textfont=dict(size=11, family="Inter"),
+                    showscale=True,
+                    colorbar=dict(
+                        thickness=10, len=0.9,
+                        tickfont=dict(size=10, color="#4d463d"),
+                        outlinewidth=0,
+                    ),
+                ))
+                fig_heat.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(family="Inter", color="#4d463d", size=11),
+                    height=max(220, len(candidate_names) * 40 + 80),
+                    margin=dict(l=0, r=0, t=20, b=0),
+                )
+                st.plotly_chart(fig_heat, use_container_width=True)
+
+            st.markdown("---")
+            for candidate in shortlist.ranked_candidates:
+                _render_candidate_card(candidate, rubric)
+
+    with tabs[1]:
+        # â”€â”€ Honeypot / Excluded breakdown â€” aggregate view, never a raw list of 18K rows â”€â”€
+        all_sc = run.structured_scores if (is_jsonl and run.structured_scores) else []
+        hp_scores = [s for s in all_sc if s.is_honeypot]
+        n_excl_hard = sum(1 for s in all_sc if s.is_honeypot and (
+            any(r.startswith('CHK_A') or r.startswith('CHK_B') for r in s.honeypot_reasons)
+        ))
+        n_excl_soft = len(hp_scores) - n_excl_hard
+
+        # Human-readable check name map
+        CHECK_LABELS = {
+            "CHK_A_salary_inversion":          "Salary range inverted (min > max)",
+            "CHK_B_github_inactive_paradox":   "GitHub score high but account inactive 2+ years",
+            "CHK_1_skill_duration_impossible": "Skill duration exceeds entire career length",
+            "CHK_2_career_yoe_mismatch":       "Total career months >> declared years of experience",
+            "CHK_3_expert_zero_endorsements":  "3+ 'expert' skills with zero endorsements & zero duration",
+            "CHK_4_education_date_inversion":  "Education end year before start year",
+            "CHK_6_yoe_exceeds_career_start":  "Declared YoE impossible given earliest career start year",
+            "CHK_C_profile_completeness_paradox": "100% profile completeness with zero network activity",
+            "CHK_D_assessment_zero_endorsement":  "Perfect assessment score + zero endorsements anywhere",
+            "CHK_E_career_gap_impossibility":  "Documented career months < half of declared YoE",
+            "CHK_F_new_signup_high_yoe":       "New account (<30 days) claiming 5+ years experience",
+            "CHK_G_expert_no_assessments":     "5+ expert skills but zero platform assessments taken",
+        }
+
+        if hp_scores:
+            st.markdown(f"""
+            <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem;">
+              <div class="stat-badge rose">&#x26A1; {len(hp_scores):,} total excluded</div>
+              <div class="stat-badge rose">&#x1F534; {n_excl_hard:,} hard-signal (single check)</div>
+              <div class="stat-badge" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);color:#fbbf24;">
+                &#x26A0; {n_excl_soft:,} soft-signal (2+ checks)
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Breakdown by trigger type
+            from collections import Counter
+            reason_counter = Counter()
+            for s in hp_scores:
+                for r in s.honeypot_reasons:
+                    reason_counter[r] += 1
+
+            st.markdown("#### Exclusion Breakdown by Signal")
+            breakdown_rows = []
+            for chk, count in reason_counter.most_common():
+                label = CHECK_LABELS.get(chk, chk)
+                tier = "Hard (1-hit)" if chk.startswith(("CHK_A", "CHK_B")) else "Soft (2-hit)"
+                breakdown_rows.append({"Signal": chk, "Reason": label, "Tier": tier, "Count": count})
+
+            breakdown_df = pd.DataFrame(breakdown_rows)
+            st.dataframe(breakdown_df, use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+            st.markdown("#### Sample Excluded Candidates (first 15)")
+            st.caption("Showing 15 of {:,} excluded â€” use Complete Order view to see all in rank context.".format(len(hp_scores)))
+            for s in hp_scores[:15]:
+                reasons_human = [CHECK_LABELS.get(r, r) for r in s.honeypot_reasons]
+                reason_str = " | ".join(reasons_human[:2])
+                st.markdown(f"""
+                <div style="background:rgba(251,113,133,0.06); border:1px solid rgba(251,113,133,0.2);
+                border-radius:8px; padding:10px 14px; margin-bottom:8px; display:flex; align-items:center; gap:1rem;">
+                  <span style="color:#fb7185; font-size:1.1rem;">&#x1F6AB;</span>
+                  <div>
+                    <div style="font-weight:600; color:#111111;">{s.current_title} &middot; {s.location}</div>
+                    <div style="font-size:0.78rem; color:#fb7185; margin-top:2px;">{reason_str}</div>
+                    <div style="font-size:0.75rem; color:#6b6258;">Score (before exclusion): {s.composite_score:.3f}</div>
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.success("No anomalous profiles detected in this run.")
+
+    with tabs[2]:
+        if rubric:
+            col_r1, col_r2, col_r3 = st.columns(3)
+            with col_r1:
+                st.markdown(f"**Role:** {rubric.job_title}")
+            with col_r2:
+                st.markdown(f"**Frozen:** `{rubric.frozen_at}`")
+            with col_r3:
+                st.markdown(f"**Bonus:** `{rubric.bonus_sensitivity}`")
+
+            rows = [{"ID": c.id, "Criterion": c.criterion, "Category": c.category,
+                     "Weight": f"{c.weight:.3f}", "Rationale": c.rationale}
+                    for c in rubric.weighted_criteria]
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+
+            if rubric.hard_gates:
+                st.markdown("**Hard Gates:**")
+                for g in rubric.hard_gates:
+                    st.markdown(f"- {'ðŸ”´ Strict' if g.strict else 'ðŸŸ¡ Flexible'}: {g.criterion}")
+
+    with tabs[3]:
+        run_dir = run.run_dir
+        csv_path = run_dir / "ranked_shortlist.csv"
+        html_path = run_dir / "run_report.html"
+        rubric_path = run_dir / "rubric.json"
+
+        st.markdown("### ðŸ“¥ Download Artifacts")
+        col_dl1, col_dl2, col_dl3 = st.columns(3)
+        with col_dl1:
+            if csv_path.exists():
+                st.download_button(
+                    "ðŸ“Š Download CSV", data=csv_path.read_bytes(),
+                    file_name=f"ranked_{shortlist.run_id}.csv", mime="text/csv",
+                )
+                st.caption("Submission-ready ranked list")
+        with col_dl2:
+            if html_path.exists():
+                st.download_button(
+                    "ðŸ“„ Download HTML Report", data=html_path.read_bytes(),
+                    file_name=f"report_{shortlist.run_id}.html", mime="text/html",
+                )
+                st.caption("Self-contained visual report")
+        with col_dl3:
+            if rubric_path.exists():
+                st.download_button(
+                    "ðŸ“‹ Download Rubric JSON", data=rubric_path.read_bytes(),
+                    file_name=f"rubric_{shortlist.run_id}.json", mime="application/json",
+                )
+                st.caption("Audit trail for this run")
+
+        st.markdown(f"<div style='font-size:0.78rem; color:#948a7c; margin-top:1rem;'>Output directory: <code>{run_dir}</code></div>", unsafe_allow_html=True)
+
+    if is_jsonl and len(tabs) > 4:
+        with tabs[4]:
+            st.markdown("## Complete Order â€” Full Ranking View")
+            st.markdown("""
+            <div style="font-size:0.83rem; color:#4d463d; margin-bottom:1.2rem;">
+              All candidates shown in a single unified rank order by composite score.
+              <span style="color:#34d399; font-weight:600;">&#x2588; Shortlisted</span> = in submission &nbsp;|&nbsp;
+              <span style="color:#fb7185; font-weight:600;">&#x2588; Excluded</span> = anomalous profile detected &nbsp;|&nbsp;
+              <span style="color:#60a5fa; font-weight:600;">&#x2588; Candidate</span> = clean, ranked but outside top 100
+            </div>
+            """, unsafe_allow_html=True)
+
+            all_scores = run.structured_scores
+            total_pool = len(all_scores)
+            n_honeypots = sum(1 for s in all_scores if s.is_honeypot)
+            n_clean     = total_pool - n_honeypots
+
+            # Summary metrics
+            c1, c2, c3, c4, c5 = st.columns(5)
+            with c1: st.metric("Total Pool", f"{total_pool:,}")
+            with c2: st.metric("Shortlisted", 100)
+            with c3: st.metric("Excluded", f"{n_honeypots:,}")
+            with c4: st.metric("Remaining Clean", f"{n_clean - 100:,}")
+            with c5:
+                top_s = next((s for s in all_scores if not s.is_honeypot), None)
+                st.metric("Top Score", f"{top_s.composite_score:.4f}" if top_s else "N/A")
+
+            st.markdown("---")
+
+            # Controls
+            col_n, col_search = st.columns([1, 2])
+            with col_n:
+                view_n = st.slider(
+                    "View top N positions", min_value=10, max_value=300,
+                    value=30, step=10, key="complete_order_n",
+                    help="Shows the top N candidates in rank order, including any excluded profiles that would have appeared in this range."
+                )
+            with col_search:
+                search_q = st.text_input(
+                    "Filter by title / location", key="complete_order_search",
+                    placeholder="e.g. NLP Engineer, Noida..."
+                )
+
+            # Build unified rank: sort ALL by composite_score (ignoring is_honeypot),
+            # take top view_n, display each with status badge.
+            # We limit to top-2000 for perf, then slice view_n.
+            CHECK_LABELS_BRIEF = {
+                "CHK_A_salary_inversion":          "Salary range inverted",
+                "CHK_B_github_inactive_paradox":   "GitHub + inactive paradox",
+                "CHK_1_skill_duration_impossible": "Skill older than career",
+                "CHK_2_career_yoe_mismatch":       "Career months >> YoE",
+                "CHK_3_expert_zero_endorsements":  "Expert skills with zero proof",
+                "CHK_4_education_date_inversion":  "Education dates inverted",
+                "CHK_6_yoe_exceeds_career_start":  "YoE exceeds career start",
+                "CHK_C_profile_completeness_paradox": "Perfect profile, zero network",
+                "CHK_D_assessment_zero_endorsement":  "Perfect score, zero endorsements",
+                "CHK_E_career_gap_impossibility":  "Career gap vs claimed YoE",
+                "CHK_F_new_signup_high_yoe":       "New account, high YoE claim",
+                "CHK_G_expert_no_assessments":     "Expert skills, no assessments",
+            }
+
+            # Build submission ID set for fast lookup
+            submission_ids = set()
+            sub_csv = Path("submission.csv")
+            if sub_csv.exists():
+                import csv as _csv
+                with open(sub_csv, encoding="utf-8") as _f:
+                    for row in _csv.DictReader(_f):
+                        submission_ids.add(row["candidate_id"])
+
+            # Sort ALL scores by raw composite (not honeypot-penalised order)
+            unified = sorted(all_scores, key=lambda s: -s.composite_score)
+
+            # Filter by search if set
+            if search_q:
+                q = search_q.lower()
+                unified = [s for s in unified if q in s.current_title.lower() or q in s.location.lower() or q in s.name.lower()]
+
+            display_list = unified[:view_n]
+
+            for global_pos, s in enumerate(display_list, start=1):
+                is_sub    = s.candidate_id in submission_ids and not s.is_honeypot
+                is_hp     = s.is_honeypot
+                # Badge colours
+                if is_sub:
+                    badge_bg   = "rgba(52,211,153,0.10)"
+                    badge_bdr  = "rgba(52,211,153,0.30)"
+                    badge_col  = "#34d399"
+                    badge_text = "SHORTLISTED"
+                    badge_icon = "&#x2714;"
+                elif is_hp:
+                    badge_bg   = "rgba(251,113,133,0.10)"
+                    badge_bdr  = "rgba(251,113,133,0.30)"
+                    badge_col  = "#fb7185"
+                    badge_text = "EXCLUDED"
+                    badge_icon = "&#x1F6AB;"
+                else:
+                    badge_bg   = "rgba(96,165,250,0.07)"
+                    badge_bdr  = "rgba(96,165,250,0.20)"
+                    badge_col  = "#60a5fa"
+                    badge_text = "CANDIDATE"
+                    badge_icon = "&#x1F464;"
+
+                # Exclusion reason (brief)
+                excl_note = ""
+                if is_hp and s.honeypot_reasons:
+                    reasons_brief = [CHECK_LABELS_BRIEF.get(r, r) for r in s.honeypot_reasons[:2]]
+                    excl_note = f"<span style='color:#fb7185; font-size:0.74rem;'> &mdash; {' | '.join(reasons_brief)}</span>"
+
+                # Rank label
+                rank_label = f"#{s.rank}" if s.rank else f"#{global_pos}"
+
+                st.markdown(f"""
+                <div style="background:{badge_bg}; border:1px solid {badge_bdr}; border-radius:10px;
+                padding:10px 16px; margin-bottom:8px; display:flex; align-items:center; gap:1rem;">
+                  <div style="min-width:2.4rem; text-align:center; font-weight:700;
+                  color:{badge_col}; font-size:0.85rem;">{rank_label}</div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-weight:600; color:#111111; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                      {s.current_title} &middot; <span style='color:#4d463d;'>{s.location}</span>
+                      {excl_note}
+                    </div>
+                    <div style="font-size:0.78rem; color:#6b6258; margin-top:2px;">
+                      {s.years_of_experience:.1f} yrs &nbsp;&middot;&nbsp;
+                      {s.current_company} &nbsp;&middot;&nbsp;
+                      Score: <span style='color:{badge_col}; font-weight:600;'>{s.composite_score:.4f}</span>
+                    </div>
+                  </div>
+                  <div style="min-width:fit-content; background:{badge_bdr}; color:{badge_col};
+                  font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:20px;
+                  letter-spacing:0.04em;">{badge_icon} {badge_text}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            if not display_list:
+                st.info("No candidates match the current filter.")
+
+            st.markdown("---")
+            st.markdown("### Export Submission CSV")
+            if st.button("Generate & Download submission.csv", key="btn_export_pool_csv"):
+                import io, csv as _csv2
+                clean = [s for s in all_scores if not s.is_honeypot][:100]
+                csv_buf = io.StringIO()
+                w = _csv2.writer(csv_buf)
+                w.writerow(["candidate_id", "rank", "score", "reasoning"])
+                for i, s in enumerate(clean):
+                    w.writerow([s.candidate_id, i + 1, round(s.composite_score, 4), s.reasoning])
+                st.download_button(
+                    "Download submission.csv",
+                    data=csv_buf.getvalue().encode("utf-8"),
+                    file_name=f"submission_{run.run_id}.csv",
+                    mime="text/csv",
+                )
+
+    # New Run
+    st.markdown("---")
+    if st.button("ðŸ”„ Start New Evaluation Run"):
+        for key in ["jd_parse_result", "frozen_rubric", "pipeline_run",
+                    "jd_file_path", "resume_file_paths", "progress_updates",
+                    "run_complete", "run_error",
+                    "is_jsonl_mode", "jsonl_file_path", "jsonl_llm_top_n"]:
+            st.session_state[key] = None if key not in ["resume_file_paths", "progress_updates"] else []
+        st.session_state.is_jsonl_mode = False
+        st.session_state.jsonl_llm_top_n = 50
+        st.session_state.page = "upload"
+        st.rerun()
+
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Candidate Card
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def _render_candidate_card(candidate: CandidateRecord, rubric: FrozenRubric):
+    score = candidate.final_score
+    sc = score_color(score)
+    conf = candidate.confidence
+    conf_color = {"High": "#34d399", "Medium": "#fbbf24", "Low": "#fb7185"}.get(conf, "#4d463d")
+
+    flag_html = ""
+    for f in candidate.red_flags:
+        cls = f"flag-{f.severity}"
+        flag_html += f'<span class="flag-chip {cls}">{f.type}</span> '
+
+    with st.expander(
+        f"#{candidate.rank}  {candidate.name}  â€”  {score:.2f}/10  ({conf} confidence)",
+        expanded=(candidate.rank == 1)
+    ):
+        col_scores, col_sidebar = st.columns([3, 1])
+
+        with col_scores:
+            if flag_html:
+                st.markdown(f"<div style='margin-bottom:10px;'>{flag_html}</div>", unsafe_allow_html=True)
+
+            st.markdown("#### ðŸ“‹ Criterion Scores")
+            score_map = {cs.criterion_id: cs for cs in candidate.criterion_scores}
+
+            for crit in rubric.weighted_criteria:
+                cs = score_map.get(crit.id)
+                if cs:
+                    bar_w = int(cs.score / 10 * 100)
+                    bar_color = score_color(cs.score)
+                    verified_icon = "âœ…" if cs.evidence_verified else "âš ï¸"
+
+                    st.markdown(
+                        f"<div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;'>"
+                        f"<span style='font-size:0.88rem; font-weight:600; color:#111111;'>{crit.criterion}</span>"
+                        f"<span style='font-size:0.78rem; color:#948a7c;'>w={crit.weight:.2f}</span>"
+                        f"</div>"
+                        f"<div style='display:flex; align-items:center; gap:10px; margin-bottom:2px;'>"
+                        f"<div class='score-bar-bg' style='flex:1;'>"
+                        f"<div class='score-bar-fill' style='width:{bar_w}%; background:linear-gradient(90deg,{bar_color}88,{bar_color});'></div>"
+                        f"</div>"
+                        f"<span style='font-size:0.88rem; font-weight:700; color:{bar_color}; min-width:42px; text-align:right;'>{cs.score}/10</span>"
+                        f"<span style='font-size:0.82rem;'>{verified_icon}</span>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                    if cs.evidence_quote != "NO_EVIDENCE_FOUND" and cs.evidence_quote:
+                        st.markdown(
+                            f'<div class="evidence-quote">ðŸ“Ž {cs.evidence_quote}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown("<div style='font-size:0.78rem; color:#948a7c; margin-bottom:4px;'>ðŸ“Ž No evidence found</div>", unsafe_allow_html=True)
+
+                    if cs.answer:
+                        st.caption(f"ðŸ’¬ {cs.answer}")
+
+                    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+
+        with col_sidebar:
+            st.markdown(f"""
+            <div class="card" style="text-align:center; padding:1rem;">
+              <div style="font-size:2rem; font-weight:800; color:{sc}; line-height:1;">{score:.2f}</div>
+              <div style="font-size:0.72rem; color:#948a7c; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;">Final Score / 10</div>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                  <span style="color:#4d463d;">Base</span>
+                  <span style="color:#111111; font-weight:600;">{candidate.base_score:.2f}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                  <span style="color:#4d463d;">Bonus</span>
+                  <span style="color:#34d399; font-weight:600;">+{candidate.bonus_applied:.2f}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                  <span style="color:#4d463d;">Embed Sim</span>
+                  <span style="color:#111111; font-weight:600;">{candidate.embedding_score:.2f}</span>
+                </div>
+                <hr style="border-color:rgba(255,128,199,0.15); margin:6px 0;">
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem; align-items:center;">
+                  <span style="color:#4d463d;">Confidence</span>
+                  <span style="font-size:0.75rem; font-weight:700; color:{conf_color}; background:rgba({','.join(str(int(conf_color[i:i+2],16)) for i in (1,3,5))},0.15); padding:2px 8px; border-radius:100px;">{conf}</span>
+                </div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if candidate.open_signals:
+                st.markdown("#### ðŸŒŸ Open Signals")
+                for sig in candidate.open_signals:
+                    st.markdown(
+                        f"<div style='background:rgba(255,128,199,0.08); border:1px solid rgba(255,128,199,0.2); "
+                        f"border-radius:6px; padding:7px 10px; margin-bottom:4px; font-size:0.8rem;'>"
+                        f"â­ {sig.signal}<br>"
+                        f"<span style='color:#111111; font-size:0.74rem;'>strength: {sig.strength:.2f}</span></div>",
+                        unsafe_allow_html=True,
+                    )
+
+            if candidate.gate_results:
+                st.markdown("#### ðŸ”’ Gates")
+                for gr in candidate.gate_results:
+                    icon = "âœ…" if gr.passed else "âŒ"
+                    st.markdown(f"<div style='font-size:0.8rem; margin-bottom:2px;'>{icon} {gr.criterion[:38]}{'â€¦' if len(gr.criterion)>38 else ''}</div>", unsafe_allow_html=True)
+
+
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Main Router
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def main():
+    render_sidebar()
+    page = st.session_state.page
+    if page == "upload":
+        page_upload()
+    elif page == "calibrate":
+        page_calibrate()
+    elif page == "processing":
+        page_processing()
+    elif page == "results":
+        page_results()
+    else:
+        st.session_state.page = "upload"
+        st.rerun()
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
+
+

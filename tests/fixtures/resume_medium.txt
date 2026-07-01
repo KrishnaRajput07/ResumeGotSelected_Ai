@@ -1,0 +1,59 @@
+Priya Mehta
+priya.mehta@gmail.com | +91-99123-45678
+Pune, Maharashtra
+
+PROFILE
+Backend developer with 4 years of experience building web applications using Python and Django. Comfortable with AWS basics and SQL. Looking to grow into larger distributed systems work.
+
+WORK EXPERIENCE
+
+Software Developer — Backend
+FinTrack Software Pvt. Ltd., Pune
+March 2021 – Present
+
+- Developed and maintained Django REST Framework APIs for a personal finance management application with 15,000 monthly active users
+- Wrote SQL queries and Django ORM queries against PostgreSQL database; basic index tuning for slow queries
+- Deployed application on AWS EC2 instances; configured S3 buckets for file storage; basic CloudWatch alarms
+- Implemented background jobs using Celery and Redis for email notifications and PDF report generation
+- Wrote unit and integration tests using pytest; coverage around 70% on core business logic
+- Participated in biweekly code reviews; collaborated with 2 frontend developers and 1 designer
+
+Junior Python Developer
+SoftCraft Technologies, Pune
+January 2020 – February 2021
+
+- Built internal tooling and automation scripts in Python
+- Assisted senior developers in maintaining a Django e-commerce backend
+- Fixed bugs, wrote migrations, and wrote basic API endpoints under supervision
+- Used Git for version control; basic branching and pull request workflow
+
+EDUCATION
+
+BE in Computer Science and Engineering
+BITS Pilani, Goa Campus
+August 2016 – May 2020 | CGPA: 7.8/10
+
+SKILLS
+
+Languages: Python, SQL, JavaScript (basic)
+Frameworks: Django, Django REST Framework, Flask (basic)
+Databases: PostgreSQL, MySQL, Redis
+Cloud: AWS (EC2, S3 only — limited experience), no Kubernetes
+Tools: Git, Docker (basic usage, not production), Celery, pytest
+Other: REST API design, HTML/CSS basics
+
+PROJECTS
+
+Budget Tracker App (personal project)
+A Django + PostgreSQL web app for tracking monthly expenses. Deployed on a single EC2 t2.micro instance. Basic CRUD with authentication.
+
+CSV Data Import Tool
+Python script for bulk-importing customer data from CSV files into PostgreSQL, with validation and error reporting.
+
+CERTIFICATIONS
+
+- AWS Cloud Practitioner (2022) — foundational level only
+
+LANGUAGES
+
+English (professional), Hindi (native), Marathi (conversational)

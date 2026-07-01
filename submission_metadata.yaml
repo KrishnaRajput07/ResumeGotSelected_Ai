@@ -1,0 +1,65 @@
+# Redrob Hackathon — Submission Metadata
+# Fill in your team details before submitting.
+
+team_name: "your-team-name-here"
+
+primary_contact:
+  name: "Full Name"
+  email: "your@email.com"
+  phone: "+91-XXXXXXXXXX"
+
+team_members:
+  - name: "Full Name"
+    email: "your@email.com"
+    role: "ML Engineer"
+
+github_repo: "https://github.com/YOUR_USERNAME/YOUR_REPO"
+sandbox_link: "https://your-streamlit-cloud-or-hf-spaces-url"
+reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
+
+compute:
+  platform: "Local Windows Machine"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.13"
+  os: "Windows 11"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: true
+  pre_computation_time_minutes: 90
+
+ai_tools_used:
+  - "Kiro (AWS)"
+
+ai_usage_summary: |
+  Used Kiro AI assistant for code review, architecture discussion, and debugging.
+  All candidate data processing is fully local — no candidate data was sent to
+  any external API. The ranking system uses local Ollama (qwen3:8b) for LLM
+  scoring during pre-computation, and pure deterministic math during rank.py.
+
+methodology_summary: |
+  Three-layer ranking architecture:
+
+  Layer 1 — Honeypot Detection (12 checks, 2 tiers): Filters ~80 impossible
+  profiles using hard signals (salary inversion, GitHub paradox) and soft signals
+  (2+ independent impossibilities). Zero honeypots in final top-100.
+
+  Layer 2 — Behavioral Composite (deterministic, no LLM): Scores all 100K
+  candidates on skill taxonomy (10 categories), career quality (product-company
+  bias, consulting penalty), experience sweet-spot (5-9 yrs), education tier, and
+  23 Redrob platform engagement signals. Runs in ~3 min on CPU.
+
+  Layer 3 — LLM Evidence-Grounded Scoring (pre-computed, Ollama qwen3:8b):
+  Top 200 candidates receive full evidence Q&A scoring (Step 5), parallel passes
+  for open signals / red flags / hard gates (Step 6), and weighted score assembly
+  (Step 7). Evidence quotes are fuzzy-validated against source text.
+
+  Final composite: 0.65 × LLM_score/10 + 0.25 × behavioral + 0.10 × embedding.
+  rank.py reads precomputed artifacts and produces submission.csv in <10 seconds.
+
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true

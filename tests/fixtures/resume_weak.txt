@@ -1,0 +1,71 @@
+Rahul Verma
+rahul.verma123@yahoo.com | +91-91234-56789
+Nagpur, Maharashtra
+
+OBJECTIVE
+Hardworking and enthusiastic fresher with 2 years of experience in web development. Looking for opportunities to learn and grow in a software company.
+
+WORK EXPERIENCE
+
+Web Developer
+Creative Web Agency, Nagpur
+June 2022 – Present
+
+- Developed and maintained websites for local clients using PHP and WordPress
+- Built custom PHP scripts for contact forms, image galleries, and basic CRUD operations
+- Created frontend pages using HTML, CSS, JavaScript, and jQuery
+- Used MySQL database for storing client data
+- Maintained and updated existing WordPress themes and plugins
+- Basic SEO implementation for client websites
+
+Junior IT Support / Web Developer Intern
+Tech Help Centre, Nagpur
+January 2022 – May 2022
+
+- Provided basic IT support (hardware and software troubleshooting)
+- Assisted web developer with HTML and CSS updates
+- Data entry and basic Excel reporting
+
+EDUCATION
+
+BE in Electronics and Telecommunication Engineering
+Government College of Engineering, Nagpur (RTMNU affiliated)
+August 2018 – June 2022 | CGPA: 6.4/10
+
+SKILLS
+
+Languages: PHP, JavaScript, HTML, CSS
+CMS: WordPress, basic Joomla
+Databases: MySQL (basic SQL queries only)
+Tools: XAMPP, FileZilla, Adobe Photoshop (basic), MS Office
+Version Control: Git (basic add/commit/push only)
+Other: jQuery, Bootstrap
+
+No Python experience
+No cloud computing experience (no AWS, Azure, or GCP)
+No Docker or containerisation experience
+No experience with APIs or microservices
+
+COURSES & CERTIFICATIONS
+
+- PHP & MySQL Web Development — Udemy (online course, 2021)
+- HTML, CSS, JavaScript for Web Developers — Coursera (online course, 2021)
+- Microsoft Office Specialist — MOS certification (2020)
+
+PERSONAL PROJECTS
+
+Restaurant Website
+Built a static restaurant website using HTML, CSS, and JavaScript with a PHP contact form. Hosted on shared hosting.
+
+College Canteen Menu System
+Simple PHP + MySQL system for viewing the college canteen menu. Single-page CRUD application.
+
+EXTRACURRICULAR
+
+- Member, College Cricket Team (2018–2022)
+- Volunteered at NSS (National Service Scheme) events
+- Organised department cultural fest, 2020
+
+LANGUAGES
+
+Hindi (native), Marathi (native), English (basic professional)

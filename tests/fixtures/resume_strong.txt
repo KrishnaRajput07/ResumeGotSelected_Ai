@@ -1,0 +1,78 @@
+Arjun Sharma
+arjun.sharma@email.com | +91-98765-43210 | github.com/arjunsharma | linkedin.com/in/arjunsharma
+Bengaluru, Karnataka
+
+SUMMARY
+Senior Backend Engineer with 7 years of experience building high-throughput Python microservices at scale. AWS Certified Solutions Architect. Deep expertise in FastAPI, PostgreSQL, Docker, and Kubernetes. Led teams of 8 engineers delivering platform infrastructure serving 500K+ RPS. Open-source contributor with 2K GitHub stars across projects.
+
+WORK EXPERIENCE
+
+Senior Software Engineer — Platform Engineering
+DataNova Technologies, Bengaluru
+July 2021 – Present
+
+- Architected and led development of a real-time event processing platform handling 500,000 requests per second using FastAPI async workers and Kafka; reduced P99 latency from 450ms to 38ms
+- Led a team of 8 backend engineers across 3 time zones; conducted weekly 1:1s, quarterly performance reviews, and technical interviews for 30+ candidates
+- Designed PostgreSQL schema for multi-tenant SaaS platform; implemented row-level security, partial indexes, and connection pooling (PgBouncer) cutting query costs by 62%
+- Migrated 14 Django monolith services to FastAPI microservices deployed on Kubernetes (EKS); automated rollouts with GitHub Actions CI/CD; zero downtime migrations
+- Built AWS infrastructure using Terraform: VPC, ECS, RDS Multi-AZ, CloudFront, S3 lifecycle policies; reduced monthly AWS spend by $18K through right-sizing
+- Implemented distributed tracing with OpenTelemetry + Jaeger across all microservices; MTTD dropped from 2.1 hours to 11 minutes
+
+Software Engineer — Backend
+CloudSprint Pvt. Ltd., Pune
+June 2019 – June 2021
+
+- Built REST APIs in Django REST Framework serving 80K daily active users; implemented JWT authentication, rate limiting, and API versioning
+- Designed Redis caching layer reducing database load by 70% on hot read paths
+- Containerised 6 legacy applications using Docker; wrote multi-stage Dockerfiles reducing image sizes by 55%
+- Deployed services on AWS EC2 and ECS; configured Auto Scaling Groups and Application Load Balancers
+- Mentored 3 junior engineers; introduced code review culture and reduced bug escape rate by 40%
+
+Software Engineer — Junior
+WebStack Solutions, Hyderabad
+August 2017 – May 2019
+
+- Developed Python Flask APIs for internal tooling and client dashboards
+- Wrote unit tests with pytest achieving 85% coverage on core modules
+- Worked with PostgreSQL and MySQL for data storage and reporting queries
+
+EDUCATION
+
+MS in Computer Science — Machine Learning Track
+Carnegie Mellon University, Pittsburgh, USA
+August 2015 – May 2017 | GPA: 3.87/4.0
+Thesis: Efficient Approximate Nearest Neighbour Search for High-Dimensional Embeddings
+
+BS in Computer Science and Engineering
+IIT Bombay, Mumbai, India
+August 2011 – May 2015 | GPA: 8.9/10 (Silver Medallist)
+
+SKILLS
+
+Languages: Python (expert), Go (proficient), SQL, Bash
+Frameworks: FastAPI, Django, Flask, gRPC, Celery
+Databases: PostgreSQL, Redis, MongoDB, DynamoDB
+Cloud: AWS (EC2, ECS, EKS, S3, RDS, Lambda, IAM, CloudFront, CloudWatch) — AWS Certified Solutions Architect
+Containers & Orchestration: Docker, Kubernetes (EKS), Helm, ArgoCD
+ML & Data: PyTorch, scikit-learn, Kafka, Apache Spark (basics), Pandas, NumPy
+Observability: OpenTelemetry, Jaeger, Prometheus, Grafana, DataDog
+CI/CD: GitHub Actions, Jenkins, Terraform, Ansible
+
+CERTIFICATIONS
+
+- AWS Certified Solutions Architect – Associate (2022, renewed 2024)
+- Certified Kubernetes Administrator (CKA) — CNCF (2023)
+
+OPEN SOURCE & PROJECTS
+
+fastapi-auth-kit (github.com/arjunsharma/fastapi-auth-kit) — 2,100 GitHub stars
+A production-ready authentication library for FastAPI with JWT, OAuth2, rate limiting, and audit logging. Used by 400+ projects.
+
+pg-query-explainer — 340 GitHub stars
+CLI tool to parse and visualise PostgreSQL EXPLAIN ANALYZE output; contributed back to psql community.
+
+AWARDS & RECOGNITION
+
+- "Engineer of the Year" — DataNova Technologies, 2023
+- Finalist, ACM ICPC Asia Regional, 2014
+- Recipient, Google India PhD Fellowship (declined to pursue industry), 2017
