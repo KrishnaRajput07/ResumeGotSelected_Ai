@@ -1,42 +1,72 @@
 # Redrob Hackathon — Submission Metadata
 # Fill in your team details before submitting.
 
-team_name: "your-team-name-here"
+# ============================================================================
+# Team identity
+# ============================================================================
+team_name: "KrishnaRajput07"  #individula for hiring challenge
 
 primary_contact:
-  name: "Full Name"
-  email: "your@email.com"
-  phone: "+91-XXXXXXXXXX"
+  name: "Krishna Rajput"
+  email: "krishna.rajput21official@gmail.com"
+  phone: "+91-9289520788"        
 
 team_members:
-  - name: "Full Name"
-    email: "your@email.com"
-    role: "ML Engineer"
+  - name: "Krishna Rajput"
+    email: "krishna.rajput21official@gmail.com"
+    role: "Team Lead / ML Engineer"   # Solo participant
 
-github_repo: "https://github.com/YOUR_USERNAME/YOUR_REPO"
-sandbox_link: "https://your-streamlit-cloud-or-hf-spaces-url"
-reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
+# ============================================================================
+# Code and reproducibility
+# ============================================================================
+github_repo: "https://github.com/KrishnaRajput07/ResumeGotSelected_Ai"
+# Required. Must be reachable. Private repos OK if you can grant organizer
+# access at Stage 3 (the email to add will be communicated then).
 
+sandbox_link: "https://github.com/KrishnaRajput07/ResumeGotSelected_Ai#sandbox-evaluation-docker"
+# Docker-based sandbox (allowed escape hatch per Section 10.5 of submission_spec.md).
+# Build: docker build -t redrob-ai-recruiter .
+# Run:   docker run --rm redrob-ai-recruiter
+# Produces submission_sandbox.csv within the 5-minute CPU budget.
+
+reproduce_command: "python rank.py --candidates ./India_runs_data_and_ai_challenge/candidates.jsonl --out ./submission.csv"
+# Runs end-to-end in <10 seconds on CPU with 16GB RAM (reads pre-computed artifacts).
+# Pre-computation step (one-time, ~90 min): python precompute.py
+
+# ============================================================================
+# Compute environment
+# ============================================================================
 compute:
-  platform: "Local Windows Machine"
+  platform: "Local Windows Machine"   # HP laptop, Windows 11
   cpu_cores: 8
   ram_gb: 16
-  python_version: "3.13"
+  python_version: "3.13.1"            # python --version
   os: "Windows 11"
-  uses_gpu_for_inference: false
-  has_network_during_ranking: false
-  pre_computation_required: true
-  pre_computation_time_minutes: 90
+  uses_gpu_for_inference: false       # CPU-only — see compute constraints
+  has_network_during_ranking: false   # No API calls during rank.py
+  pre_computation_required: true      # Embeddings + LLM scoring pre-computed offline
+  pre_computation_time_minutes: 60    # Approximate (top-200 LLM scoring via Ollama qwen3:8b)
 
+# ============================================================================
+# AI tools declaration
+# ============================================================================
+# Transparency only — declared use is NOT penalized. Be honest.
 ai_tools_used:
-  - "Kiro (AWS)"
+  - "Kiro (AWS)"              # Architecture discussion, code review, debugging
+  - "Antigravity (Google DeepMind)"  # Submission metadata and code assistance
 
 ai_usage_summary: |
-  Used Kiro AI assistant for code review, architecture discussion, and debugging.
+  Used Kiro (AWS AI assistant) for architecture discussion, code review, and
+  debugging throughout the project. Used Antigravity (Google DeepMind) for
+  submission metadata finalization and code assistance.
   All candidate data processing is fully local — no candidate data was sent to
-  any external API. The ranking system uses local Ollama (qwen3:8b) for LLM
-  scoring during pre-computation, and pure deterministic math during rank.py.
+  any external API at any point. The ranking system uses local Ollama (qwen3:8b)
+  for LLM scoring during pre-computation, and pure deterministic math during
+  rank.py. No AI tool was given access to any candidate profiles.
 
+# ============================================================================
+# Approach summary
+# ============================================================================
 methodology_summary: |
   Three-layer ranking architecture:
 
@@ -57,9 +87,12 @@ methodology_summary: |
   Final composite: 0.65 × LLM_score/10 + 0.25 × behavioral + 0.10 × embedding.
   rank.py reads precomputed artifacts and produces submission.csv in <10 seconds.
 
+# ============================================================================
+# Declarations
+# ============================================================================
 declarations:
-  read_submission_spec: true
-  code_is_original_work: true
-  no_collusion: true
-  honeypot_check_done: true
-  reproduction_tested: true
+  read_submission_spec: true        # I have read submission_spec.md in full
+  code_is_original_work: true       # My code is my team's original work (using AI as a tool is fine)
+  no_collusion: true                # I have not coordinated my submission with other teams
+  honeypot_check_done: true         # Explicitly checked for honeypots; zero in final top-100
+  reproduction_tested: true         # I have tested that my reproduce_command runs end-to-end
